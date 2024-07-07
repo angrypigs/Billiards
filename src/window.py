@@ -21,7 +21,7 @@ class Window:
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     self.game.release()
             if pygame.mouse.get_pressed()[0]:
-                self.game.load()
+                self.game.load(pygame.mouse.get_pos())
             self.game.draw()
             pygame.display.flip()
             self.clock.tick(FPS)

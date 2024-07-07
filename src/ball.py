@@ -8,9 +8,11 @@ class Ball:
 
     def __init__(self, 
                  screen: pygame.Surface,
-                 coords: tuple[int, int]) -> None:
+                 coords: tuple[int, int],
+                 color: tuple[int, int, int]) -> None:
         self.screen = screen
         self.coords = Vector2(coords)
+        self.color = color
         self.velocity = Vector2(0, 0)
         self.moving = False
 
@@ -19,13 +21,4 @@ class Ball:
         self.moving = True
 
     def draw(self) -> None:
-        if self.moving:
-            if self.coords[0] <= LIMIT or self.coords[0] >= WIDTH - LIMIT:
-                self.velocity[0] *= -1
-            elif self.coords[1] <= LIMIT or self.coords[1] >= HEIGHT - LIMIT:
-                self.velocity[1] *= -1
-            self.coords += self.velocity
-            self.velocity *= 0.97
-            if self.velocity.magnitude() < 0.1:
-                self.moving = False
-        pygame.draw.circle(self.screen, (255, 255, 255), self.coords, RADIUS)
+        pygame.draw.circle(self.screen, self.color, self.coords, RADIUS)
