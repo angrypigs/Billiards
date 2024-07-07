@@ -30,21 +30,34 @@ class Game:
                 elif ball.coords[1] <= LIMIT or ball.coords[1] >= HEIGHT - LIMIT:
                     ball.velocity[1] *= -1
                     ball.coords += ball.velocity
-                ball.velocity *= 0.98
+                ball.velocity *= 0.99
                 if ball.velocity.magnitude() < 0.1:
                     ball.moving = False
-                    break
+                    continue
                 for ball2 in self.balls:
-                    if (ball != ball2 and 
-                        sqrt((ball2.coords[0] - ball.coords[0])**2 + (ball2.coords[1] - ball.coords[1])**2) <= 2 * RADIUS and
-                        ball.velocity.magnitude() >= ball2.velocity.magnitude()):
-                        angle = degrees(atan2(ball.coords.y - ball2.coords.y, ball.coords.x - ball2.coords.x))
-                        power = ball.velocity.magnitude()
-                        ball2.moving = True
-                        ball2.velocity = Vector2(power, 0).rotate(angle)
-                        ball2.velocity.rotate_ip(-90)
-                        ball2.coords += ball2.velocity
-                        ball.coords += ball.velocity
+                    if ball != ball2:
+                        distance = ball.coords.distance_to(ball2.coords)
+                        if distance <= 2 * RADIUS:
+
+                            collision_vector = ball2.coords - ball.coords
+                            collision_angle = atan2(collision_vector.y, collision_vector.x)
+
+                            v1 = ball.velocity.rotate(-degrees(collision_angle))
+                            v2 = ball2.velocity.rotate(-degrees(collision_angle))
+
+                            v1_final = Vector2(v2.x, v1.y)
+                            v2_final = Vector2(v1.x, v2.y)
+
+                            ball.velocity = v1_final.rotate(degrees(collision_angle))
+                            ball2.velocity = v2_final.rotate(degrees(collision_angle))
+
+                            overlap = 2 * RADIUS - distance
+                            correction = collision_vector.normalize() * (overlap / 2)
+                            ball.coords -= correction
+                            ball2.coords += correction
+                            
+                            ball2.moving = True
+        for ball in self.balls:
             ball.draw()
 
     def release(self) -> None:
