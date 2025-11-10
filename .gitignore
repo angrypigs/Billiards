@@ -1,0 +1,5 @@
+# Wszystkie katalogi __pycache__
+**/__pycache__/
+
+# Wszystkie pliki .pyc
+**/*.pyc

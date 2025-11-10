@@ -13,11 +13,14 @@ class Game:
         self.balls: list[Ball] = []
         self.power = 0
         self.angle = 0
-        self.balls.append(Ball(self.screen, (WIDTH // 2, HEIGHT // 2), (255, 255, 255), 0))
+        self.balls.append(Ball(self.screen, (WIDTH // 2, (HEIGHT - 100) // 2), (255, 255, 255), 0))
         for i, (x, y) in enumerate(START_POS):
-            self.balls.append(Ball(self.screen, (WIDTH * 3 // 4 + RADIUS * x, HEIGHT // 2 + RADIUS * y), choice(COLORS), i + 1))
+            self.balls.append(Ball(self.screen, (WIDTH * 3 // 4 + RADIUS * x, (HEIGHT - 100) // 2 + RADIUS * y), choice(COLORS), i + 1))
         self.bg = pygame.Surface((WIDTH, HEIGHT))
-        self.bg.fill((20, 120, 20))
+        self.bg.fill((0, 128, 0))
+        self.bg.blit(IMAGES["table_bg"], (0, 0))
+        self.bg.blit(IMAGES["table"], (0, 0))
+        self.mask = pygame.mask.from_surface(IMAGES["table"])
     
     def draw(self) -> None:
         self.screen.blit(self.bg, (0, 0))
