@@ -39,8 +39,8 @@ for i, (x, y) in enumerate(holes):
     points.append((points[1][0] + ah[0] * pocket_radius * 2, points[1][1] + ah[1] * pocket_radius * 2))
     points.append((points[0][0] + aw[0] * pocket_radius * 2, points[0][1] + aw[1] * pocket_radius * 2))
     draw.polygon(points, fill=field_color)
-    draw.ellipse((x - pocket_radius, y - pocket_radius, x + pocket_radius, y + pocket_radius),
-                 fill="black")
+    # draw.ellipse((x - pocket_radius, y - pocket_radius, x + pocket_radius, y + pocket_radius),
+    #              fill="black")
 
 img = img.convert("RGBA")
 datas = img.getdata()

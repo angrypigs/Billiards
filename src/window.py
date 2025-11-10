@@ -21,6 +21,9 @@ class Window:
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     self.game.release()
+                elif event.type == pygame.MOUSEMOTION:
+                    if event.buttons == (0, 0, 0):
+                        self.game.move(event.pos)
             if pygame.mouse.get_pressed()[0]:
                 self.game.load(pygame.mouse.get_pos())
             self.game.draw()
