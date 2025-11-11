@@ -16,19 +16,23 @@ class Game:
         self.balls.append(Ball(self.screen, (WIDTH // 2, (HEIGHT - 100) // 2), (255, 255, 255), 0))
         for i, (x, y) in enumerate(START_POS):
             self.balls.append(Ball(self.screen, 
-                (WIDTH * 3 // 4 + RADIUS * x, (HEIGHT - 100) // 2 + RADIUS * y), choice(COLORS), i + 1))
+                (WIDTH * 3 // 4 + RADIUS * x, (HEIGHT - 100) // 2 + RADIUS * y), COLORS[i], i + 1))
         self.bg = pygame.Surface((WIDTH, HEIGHT))
         self.bg.fill((0, 128, 0))
         self.bg.blit(IMAGES["table_bg"], (0, 0))
         self.bg.blit(IMAGES["table"], (0, 0))
+        for c in HOLES:
+            pygame.draw.circle(self.bg, (0, 0, 0), c, POCKET_RADIUS)
         self.mask = pygame.mask.from_surface(IMAGES["table"])
         self.mask_surf = self.mask.to_surface(setcolor=(255,0,0,255), unsetcolor=(0,0,0,0))
         
         self.cue = None
         self.cue_pos = [0, 0]
         
-
-    
+        self.player_flag = None
+        self.shoot_counter = 0
+        
+        
     def draw(self) -> None:
         self.screen.blit(self.bg, (0, 0))
         # self.screen.blit(self.mask_surf, (0,0))
@@ -47,6 +51,8 @@ class Game:
             ball.draw()
         if self.cue is not None:
             self.screen.blit(self.cue, self.cue_pos)
+        if not any([b.moving for b in self.balls]) and self.player_flag is None:
+            self.player_flag = 0
             
     def __ball_collision_single(self, ball: Ball) -> None:
         offset = (int(ball.coords[0] - RADIUS), int(ball.coords[1] - RADIUS))
@@ -56,6 +62,22 @@ class Game:
             dot = ball.velocity[0] * nx + ball.velocity[1] * ny
             ball.velocity[0] -= 2 * dot * nx
             ball.velocity[1] -= 2 * dot * ny
+            ball.coords += ball.velocity
+        for (x, y) in HOLES:
+            dx = x - ball.coords.x
+            dy = y - ball.coords.y
+            d = sqrt(dx**2 + dy**2)
+            if d < 20:
+                print(ball, d)
+            if d < POCKET_RADIUS:
+                print(ball.index)
+                if ball.index == 0:
+                    self.shoot_counter = -1
+                    ball.velocity.x, ball.velocity.y = 0, 0
+                    ball.coords.x, ball.coords.y = WIDTH // 2, (HEIGHT - 100) // 2
+                else:
+                    self.shoot_counter += 1
+                    self.balls.remove(ball)
     
     def __ball_collision_double(self, ball: Ball, ball2: Ball) -> None:
         distance = ball.coords.distance_to(ball2.coords)
@@ -75,7 +97,7 @@ class Game:
             ball2.moving = True
             
     def cue_handle(self, pos: tuple[int, int]) -> None:
-        if not self.balls[0].moving:
+        if self.player_flag is not None:
             self.cue = pygame.transform.rotate(IMAGES["cue"].copy(), -self.angle)
             self.cue_pos = [
                 self.balls[0].coords.x + (CUE_RADIUS + self.power * 4) * cos(radians(self.angle + 180)),
@@ -86,12 +108,14 @@ class Game:
             self.cue_pos[1] -= s[1] // 2
 
     def release(self) -> None:
-        if not self.balls[0].moving:
+        if self.player_flag is not None:
             self.balls[0].punch(self.angle, self.power)
             self.power = 0
+            self.player_flag = None
+            self.cue = None
         
     def load(self, pos: tuple[int, int]) -> None:
-        if not self.balls[0].moving:
+        if self.player_flag is not None:
             ball_pos = self.balls[0].coords
             self.angle = degrees(atan2(ball_pos[1] - pos[1], ball_pos[0] - pos[0]))
             if self.power < MAX_POWER:

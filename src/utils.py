@@ -1,5 +1,6 @@
 import os, sys
 import pygame
+from src.table_pockets_render import POCKET_RADIUS, render_pockets, calculate_holes
 
 WIDTH = 1700
 HEIGHT = 1000
@@ -9,7 +10,9 @@ MAX_POWER = 15
 RADIUS = 15
 THRESHOLD = 5
 LIMIT = THRESHOLD + RADIUS
-CUE_RADIUS = 100
+CUE_RADIUS = 80
+
+HOLES = calculate_holes(width=WIDTH, height=HEIGHT-100)
 
 START_POS = (
     (0, 0),
@@ -30,11 +33,24 @@ START_POS = (
     (7, 4),
 )
 
-COLORS = (
-    (28, 101, 123),
-    (45, 28, 122),
-    (122, 28, 100)
-)
+COLORS = [
+    (255, 255, 255),
+    (100, 100, 100),
+    (229, 0, 0),
+    (0, 229, 0),
+    (0, 0, 229),
+    (229, 229, 0),
+    (229, 128, 0),
+    (128, 0, 229),
+    (0, 0, 0),
+    (229, 0, 0),
+    (0, 229, 0),
+    (0, 0, 229),
+    (229, 229, 0),
+    (229, 128, 0),
+    (128, 0, 229),
+    (0, 229, 229),
+]
 
 def res_path(rel_path: str) -> str:
     """
