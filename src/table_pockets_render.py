@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw
 from math import sqrt
 
-POCKET_RADIUS = 20
+POCKET_RADIUS = 28
 OFFSET = 28
 OFFSET_MID = 43
 

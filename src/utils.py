@@ -7,7 +7,7 @@ HEIGHT = 1000
 FPS = 120
 
 MAX_POWER = 15
-RADIUS = 15
+RADIUS = 20
 THRESHOLD = 5
 LIMIT = THRESHOLD + RADIUS
 CUE_RADIUS = 80
@@ -61,6 +61,8 @@ def res_path(rel_path: str) -> str:
     except Exception:
         base_path = sys.path[0]
     return os.path.normpath(os.path.join(base_path, rel_path))
+
+CSV_TRAINING_DATA_PATH = res_path("assets/training_data/data.csv")
 
 def estimate_normal(mask: pygame.mask, cx: int, cy: int) -> tuple[int, int]:
     gx = mask.get_at((min(cx + 1, mask.get_size()[0] - 1), cy)) - mask.get_at((max(cx - 1, 0), cy))

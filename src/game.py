@@ -1,7 +1,8 @@
 import pygame
 from pygame.math import Vector2
-from random import randint, choice
+from random import randint, choice, uniform
 from math import atan2, degrees, sqrt, sin, cos, radians
+import csv
 
 from src.utils import *
 from src.ball import Ball
@@ -28,14 +29,53 @@ class Game:
         
         self.cue = None
         self.cue_pos = [0, 0]
+        self.player_flag = 0
         
-        self.player_flag = None
+        self._history = []
         self.shoot_counter = 0
-        
+        self._save = {}
+        self.flag_won = None
         
     def draw(self) -> None:
+        self.__game_frame()
         self.screen.blit(self.bg, (0, 0))
         # self.screen.blit(self.mask_surf, (0,0))
+        for ball in self.balls:
+            ball.draw()
+        if self.cue is not None:
+            self.screen.blit(self.cue, self.cue_pos)
+            
+    def simulate(self, angle: float, power: float = MAX_POWER) -> None:
+        self.__shoot(angle, power)
+        while self.player_flag is None:
+            self.__game_frame()
+        return self.balls_pos, self.shoot_counter
+    
+    def save_history(self) -> None:
+        if self._history:
+            headers = self._history[0].keys()
+            for i in self._history:
+                print(i)
+            with open(CSV_TRAINING_DATA_PATH, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writerows(self._history)
+            self._history = []
+    
+    def __shoot(self, angle: float, power: float) -> None:
+        rand_power = uniform(power - 0.1, power + 0.1)
+        self.balls[0].punch(angle, rand_power)
+        self.power = 0
+        self.player_flag = None
+        self.cue = None
+        self.shoot_counter = 0
+        balls_pos = {"angle": angle, "power": rand_power}
+        for i in range(16):
+            found = next((b for b in self.balls if b.index == i), None)
+            balls_pos[f"{i}_x"] = -1 if found is None else found.coords.x
+            balls_pos[f"{i}_y"] = -1 if found is None else found.coords.y
+        self._save = balls_pos.copy()
+    
+    def __game_frame(self) -> None:
         for ball in self.balls:
             if ball.moving:
                 ball.coords += ball.velocity
@@ -47,12 +87,12 @@ class Game:
                 for ball2 in self.balls:
                     if ball != ball2:
                         self.__ball_collision_double(ball, ball2)
-        for ball in self.balls:
-            ball.draw()
-        if self.cue is not None:
-            self.screen.blit(self.cue, self.cue_pos)
         if not any([b.moving for b in self.balls]) and self.player_flag is None:
             self.player_flag = 0
+            self._save["score"] = self.shoot_counter
+            self._history.append(self._save.copy())
+            if len(self.balls) < 2 and self.flag_won is None:
+                self.flag_won = 0
             
     def __ball_collision_single(self, ball: Ball) -> None:
         offset = (int(ball.coords[0] - RADIUS), int(ball.coords[1] - RADIUS))
@@ -109,10 +149,7 @@ class Game:
 
     def release(self) -> None:
         if self.player_flag is not None:
-            self.balls[0].punch(self.angle, self.power)
-            self.power = 0
-            self.player_flag = None
-            self.cue = None
+            self.__shoot(self.angle, self.power)
         
     def load(self, pos: tuple[int, int]) -> None:
         if self.player_flag is not None:
