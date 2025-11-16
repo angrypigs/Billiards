@@ -6,6 +6,7 @@ import csv
 
 from src.utils import *
 from src.ball import Ball
+from src.cue import Cue
 
 class Game:
 
@@ -27,8 +28,7 @@ class Game:
         self.mask = pygame.mask.from_surface(IMAGES["table"])
         self.mask_surf = self.mask.to_surface(setcolor=(255,0,0,255), unsetcolor=(0,0,0,0))
         
-        self.cue = None
-        self.cue_pos = [0, 0]
+        self.cue = Cue(self.screen)
         self.player_flag = 0
         
         self._history = []
@@ -40,10 +40,9 @@ class Game:
         self.__game_frame()
         self.screen.blit(self.bg, (0, 0))
         # self.screen.blit(self.mask_surf, (0,0))
+        self.cue.draw()
         for ball in self.balls:
             ball.draw()
-        if self.cue is not None:
-            self.screen.blit(self.cue, self.cue_pos)
             
     def simulate(self, angle: float, power: float = MAX_POWER) -> None:
         self.__shoot(angle, power)
@@ -66,13 +65,13 @@ class Game:
         self.balls[0].punch(angle, rand_power)
         self.power = 0
         self.player_flag = None
-        self.cue = None
+        self.cue.disable()
         self.shoot_counter = 0
         balls_pos = {"angle": angle, "power": rand_power}
         for i in range(16):
             found = next((b for b in self.balls if b.index == i), None)
-            balls_pos[f"{i}_x"] = -1 if found is None else found.coords.x
-            balls_pos[f"{i}_y"] = -1 if found is None else found.coords.y
+            balls_pos[f"{i}_x"] = -1 if found is None else round(found.coords.x, 4)
+            balls_pos[f"{i}_y"] = -1 if found is None else round(found.coords.y, 4)
         self._save = balls_pos.copy()
     
     def __game_frame(self) -> None:
@@ -99,10 +98,17 @@ class Game:
         overlap = self.mask.overlap(ball.mask, offset)
         if overlap:
             nx, ny = estimate_normal(self.mask, overlap[0], overlap[1])
-            dot = ball.velocity[0] * nx + ball.velocity[1] * ny
-            ball.velocity[0] -= 2 * dot * nx
-            ball.velocity[1] -= 2 * dot * ny
-            ball.coords += ball.velocity
+            vx, vy = ball.velocity
+            dot = vx * nx + vy * ny
+            ball.velocity[0] = vx - 2 * dot * nx
+            ball.velocity[1] = vy - 2 * dot * ny
+            px, py = ball.coords
+            while self.mask.overlap(ball.mask, (int(px - RADIUS), int(py - RADIUS))):
+                # print(f"Overlap: {ball} with normal {nx}, {ny}")
+                px -= nx * 0.5
+                py -= ny * 0.5
+            ball.coords.x = px
+            ball.coords.y = py
         for (x, y) in HOLES:
             dx = x - ball.coords.x
             dy = y - ball.coords.y
@@ -138,14 +144,7 @@ class Game:
             
     def cue_handle(self, pos: tuple[int, int]) -> None:
         if self.player_flag is not None:
-            self.cue = pygame.transform.rotate(IMAGES["cue"].copy(), -self.angle)
-            self.cue_pos = [
-                self.balls[0].coords.x + (CUE_RADIUS + self.power * 4) * cos(radians(self.angle + 180)),
-                self.balls[0].coords.y + (CUE_RADIUS + self.power * 4) * sin(radians(self.angle + 180))
-            ]
-            s = self.cue.get_size()
-            self.cue_pos[0] -= s[0] // 2
-            self.cue_pos[1] -= s[1] // 2
+            self.cue.update(self.balls[0].coords, self.angle, self.power)
 
     def release(self) -> None:
         if self.player_flag is not None:

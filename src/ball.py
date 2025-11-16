@@ -17,7 +17,7 @@ class Ball:
         self.velocity = Vector2(0, 0)
         self.moving = False
         self.index = index
-        surf = pygame.Surface((RADIUS*2, RADIUS*2), pygame.SRCALPHA)
+        surf = pygame.Surface((RADIUS * 2, RADIUS * 2), pygame.SRCALPHA)
         pygame.draw.circle(surf, (255, 255, 255, 255), (RADIUS, RADIUS), RADIUS)
         self.mask = pygame.mask.from_surface(surf)
 

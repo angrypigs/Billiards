@@ -15,13 +15,14 @@ def calculate_holes(width: int, height: int):
         (width - OFFSET_MID, height - OFFSET_MID),
     ]
 
+CT = 1.3
 POCKET_SHAPES = [
-    [(1, -1), (-1, 1), (1, 1), (1, 1)],
+    [(1, -1), (-1, 1), (CT, 1), (1, CT)],
     [(-1, 0), (1, 0), (-1, 1), (1, 1)],
-    [(-1, -1), (1, 1), (-1, 1), (-1, 1)],
-    [(-1, -1), (1, 1), (1, -1), (1, -1)],
+    [(-1, -1), (1, 1), (-CT, 1), (-1, CT)],
+    [(-1, -1), (1, 1), (1, -CT), (CT, -1)],
     [(-1, 0), (1, 0), (-1, -1), (1, -1)],
-    [(-1, 1), (1, -1), (-1, -1), (-1, -1)]
+    [(-1, 1), (1, -1), (-CT, -1), (-1, -CT)]
 ]
 
 for i in (0, 2, 3, 5):
@@ -52,7 +53,7 @@ def render_pockets(
         if with_holes:
             draw.ellipse(
                 (x - POCKET_RADIUS, y - POCKET_RADIUS, x + POCKET_RADIUS, y + POCKET_RADIUS),
-                fill=(1, 1, 1)
+                fill=field_color
             )
 
     img = img.convert("RGBA")

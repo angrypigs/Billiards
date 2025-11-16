@@ -14,8 +14,8 @@ class Window:
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Billiards")
+        # render_pockets(with_holes=True)
         init_assets()
-        # render_pockets()
         self.clock = pygame.time.Clock()
         self.game = Game(self.screen)
         while True:
