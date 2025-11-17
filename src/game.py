@@ -33,6 +33,7 @@ class Game:
         
         self._history = []
         self.shoot_counter = 0
+        self._white_shooted = False
         self._save = {}
         self.flag_won = None
         
@@ -88,10 +89,28 @@ class Game:
                         self.__ball_collision_double(ball, ball2)
         if not any([b.moving for b in self.balls]) and self.player_flag is None:
             self.player_flag = 0
-            self._save["score"] = self.shoot_counter
+            self.__calculate_score()
             self._history.append(self._save.copy())
             if len(self.balls) < 2 and self.flag_won is None:
                 self.flag_won = 0
+
+    def __calculate_score(self) -> None:
+        if self._white_shooted:
+            self._save["score"] = -1
+            return
+        max_simil = 0
+        c = self.balls[0].coords
+        for ball in self.balls:
+            if ball.index != 0:
+                a = (ball.coords.x - c.x, ball.coords.y - c.y)
+                for (hx, hy) in HOLES:
+                    b = (hx - ball.coords.x, hy - ball.coords.y)
+                    simil = cosine_similarity(a, b)
+                    if simil > max_simil:
+                        max_simil = simil
+        max_simil = (max_simil + 1) / 4
+        self._save["score"] = self.shoot_counter + max_simil
+                    
             
     def __ball_collision_single(self, ball: Ball) -> None:
         offset = (int(ball.coords[0] - RADIUS), int(ball.coords[1] - RADIUS))
@@ -118,7 +137,7 @@ class Game:
             if d < POCKET_RADIUS:
                 print(ball.index)
                 if ball.index == 0:
-                    self.shoot_counter = -1
+                    self._white_shooted = True
                     ball.velocity.x, ball.velocity.y = 0, 0
                     ball.coords.x, ball.coords.y = WIDTH // 2, (HEIGHT - 100) // 2
                 else:

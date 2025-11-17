@@ -33,7 +33,7 @@ class Window:
                 self.game.load(pygame.mouse.get_pos())
             self.game.draw()
             if self.game.flag_won:
-                self.game.save_history()
+                self.game.save_history()  
                 self.game = Game(self.screen)
             pygame.display.flip()
             self.clock.tick(FPS)

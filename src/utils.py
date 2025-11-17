@@ -1,6 +1,7 @@
 import os, sys
 import pygame
 from src.table_pockets_render import POCKET_RADIUS, render_pockets, calculate_holes
+from math import sqrt
 
 WIDTH = 1700
 HEIGHT = 1000
@@ -71,6 +72,12 @@ def estimate_normal(mask: pygame.mask, cx: int, cy: int) -> tuple[int, int]:
     if length == 0:
         return (0, -1)
     return (gx / length, gy / length)
+
+def cosine_similarity(a: tuple[float, float], b: tuple[float, float]) -> float:
+    dot = a[0] * b[0] + a[1] * b[1]
+    norm_a = sqrt(a[0]**2 + a[1]**2)
+    norm_b = sqrt(b[0]**2 + b[1]**2)
+    return dot / (norm_a * norm_b)
 
 IMAGES = {}
 
