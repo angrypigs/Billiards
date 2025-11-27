@@ -7,11 +7,13 @@ import csv
 from src.utils import *
 from src.ball import Ball
 from src.cue import Cue
+from src.db import dbHandler
 
 class Game:
 
-    def __init__(self, screen: pygame.Surface, debug: bool = True) -> None:
+    def __init__(self, screen: pygame.Surface, db: dbHandler, debug: bool = True) -> None:
         self.screen = screen
+        self.db = db
         self.balls: list[Ball] = []
         self.power = 0
         self.angle = 0
@@ -65,12 +67,10 @@ class Game:
     
     def save_history(self) -> None:
         if self._history:
-            headers = self._history[0].keys()
             for i in self._history:
                 print(i)
-            with open(CSV_TRAINING_DATA_PATH, "a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=headers)
-                writer.writerows(self._history)
+            for h in self._history:
+                self.db.insert([h[x] for x in COLUMN_NAMES])
             self._history = []
     
     def __shoot(self, angle: float, power: float) -> None:
@@ -83,8 +83,8 @@ class Game:
         balls_pos = {"angle": angle, "power": rand_power}
         for i in range(BALL_QUANTITY + 1):
             found = next((b for b in self.balls if b.index == i), None)
-            balls_pos[f"{i}_x"] = -1 if found is None else round(found.coords.x, 4)
-            balls_pos[f"{i}_y"] = -1 if found is None else round(found.coords.y, 4)
+            balls_pos[f"x_{i}"] = -1 if found is None else round(found.coords.x, 4)
+            balls_pos[f"y_{i}"] = -1 if found is None else round(found.coords.y, 4)
         self._save = balls_pos.copy()
         self.debug_score = None
     
@@ -114,23 +114,23 @@ class Game:
         max_simil = 0
         debug_data = [-1, -1]
         c = self.balls[0].coords
-        for ball in self.balls:
+        for i, ball in enumerate(self.balls):
             flag = False
             if ball.index != 0:
                 for ball2 in self.balls:
                     if ball2.index != 0 and ball2.index != ball.index:
                         if (is_point_in_rectangle_buffer(c, ball.coords, ball2.coords, RADIUS * 2) or 
-                            line_hits_mask(self.mask, c.x, c.y, ball.coords.x, ball.coords.y, 50)):
+                            line_hits_mask(self.mask, c.x, c.y, ball.coords.x, ball.coords.y, WIDTH // 8)):
                             flag = True
                             break
                 if flag: continue
                 a = (ball.coords.x - c.x, ball.coords.y - c.y)
-                for i, (hx, hy) in enumerate(HOLES):
+                for j, (hx, hy) in enumerate(HOLES):
                     flag2 = False
                     for ball2 in self.balls:
                         if ball2.index != 0 and ball2.index != ball.index:
                             if (is_point_in_rectangle_buffer(ball.coords, (hx, hy), ball2.coords, RADIUS * 2) or
-                                line_hits_mask(self.mask, ball.coords.x, ball.coords.y, hx, hy, 50)):
+                                line_hits_mask(self.mask, ball.coords.x, ball.coords.y, hx, hy, WIDTH // 4)):
                                 flag2 = True
                                 break
                     if flag2: continue
@@ -138,13 +138,12 @@ class Game:
                     simil = cosine_similarity(a, b)
                     if simil > max_simil:
                         max_simil = simil
-                        debug_data = [ball.index, i]
-        print(f"{max_simil} - Similarity before scalling")
-        max_simil = max(0.0, max_simil) / 2
-        print(f"{max_simil} - Similarity after scalling")
+                        debug_data = [i, j]
+        max_simil = max(0.0, max_simil) / 4
         self._save["score"] = self.shoot_counter + max_simil
-        print(self._save["score"])
         self.debug_score = None if debug_data == [-1, -1] else debug_data
+        if self.debug and self.debug_score is not None:
+            print(self.balls[self.debug_score[0]], max_simil)
                     
             
     def __ball_collision_single(self, ball: Ball) -> None:

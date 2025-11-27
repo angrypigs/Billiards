@@ -1,6 +1,6 @@
 import os, sys
 import pygame
-from src.table_pockets_render import POCKET_RADIUS, render_pockets, calculate_holes
+from src.table_pockets_render import calculate_holes, POCKET_RADIUS
 from math import sqrt
 
 WIDTH = 1700
@@ -61,6 +61,13 @@ FONTS = {
     40: pygame.font.SysFont('Arial', 40)
 }
 
+temp = [f"{y}_{x}" for x in range(16) for y in "xy"]
+temp.extend(["angle", "power", "score"])
+COLUMN_NAMES = temp.copy()
+del temp
+
+
+
 def res_path(rel_path: str) -> str:
     """
     Return path to file modified by auto_py_to_exe path if packed to exe already
@@ -71,7 +78,9 @@ def res_path(rel_path: str) -> str:
         base_path = sys.path[0]
     return os.path.normpath(os.path.join(base_path, rel_path))
 
-CSV_TRAINING_DATA_PATH = res_path("assets/training_data/data.csv")
+TRAINING_DATA_PATH_1PLAYER = res_path("assets/training_data/model_1player.db")
+
+
 
 def is_point_in_rectangle_buffer(A: tuple[float, float], 
                                  B: tuple[float, float], 
@@ -125,6 +134,8 @@ def cosine_similarity(a: tuple[float, float], b: tuple[float, float]) -> float:
     norm_a = sqrt(a[0]**2 + a[1]**2)
     norm_b = sqrt(b[0]**2 + b[1]**2)
     return dot / (norm_a * norm_b)
+
+
 
 IMAGES = {}
 
