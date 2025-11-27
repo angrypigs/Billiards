@@ -7,6 +7,8 @@ WIDTH = 1700
 HEIGHT = 1000
 FPS = 120
 
+BALL_QUANTITY = 15
+
 MAX_POWER = 15
 RADIUS = 18
 THRESHOLD = 5
@@ -22,7 +24,6 @@ START_POS = (
     (3.5, -2),
     (3.5, 0),
     (3.5, 2),
-    (3.5, -2),
     (5.25, -3),
     (5.25, -1),
     (5.25, 1),
@@ -53,6 +54,13 @@ COLORS = [
     (0, 229, 229),
 ]
 
+pygame.font.init()
+
+FONTS = {
+    24: pygame.font.SysFont('Arial', 24),
+    40: pygame.font.SysFont('Arial', 40)
+}
+
 def res_path(rel_path: str) -> str:
     """
     Return path to file modified by auto_py_to_exe path if packed to exe already
@@ -64,6 +72,45 @@ def res_path(rel_path: str) -> str:
     return os.path.normpath(os.path.join(base_path, rel_path))
 
 CSV_TRAINING_DATA_PATH = res_path("assets/training_data/data.csv")
+
+def is_point_in_rectangle_buffer(A: tuple[float, float], 
+                                 B: tuple[float, float], 
+                                 P: tuple[float, float], 
+                                 R: float):
+    x1, y1 = A
+    x2, y2 = B
+    x, y = P
+    vx = x2 - x1
+    vy = y2 - y1
+    if vx == 0 and vy == 0:
+        dist_sq = (x - x1)**2 + (y - y1)**2
+        return dist_sq <= R**2
+    t_A = vx * x1 + vy * y1
+    t_B = vx * x2 + vy * y2
+    t_P = vx * x + vy * y
+    if not (min(t_A, t_B) <= t_P <= max(t_A, t_B)):
+        return False
+    len_AB_sq = vx*vx + vy*vy
+    len_AB = sqrt(len_AB_sq)
+    cross = abs(vx * (y - y1) - vy * (x - x1))
+    distance = cross / len_AB
+    return distance <= R
+
+def line_hits_mask(mask: pygame.mask.Mask, x1: float, y1: float, x2: float, y2: float, step: int = 1) -> bool:
+    dx = x2 - x1
+    dy = y2 - y1
+    length = sqrt(dx*dx + dy*dy)
+    if length == 0:
+        return False
+    dx /= length
+    dy /= length
+    for i in range(0, int(length) + 1, step):
+        x = int(x1 + dx * i)
+        y = int(y1 + dy * i)
+        if 0 <= x < mask.get_size()[0] and 0 <= y < mask.get_size()[1]:
+            if mask.get_at((x, y)):
+                return True
+    return False
 
 def estimate_normal(mask: pygame.mask, cx: int, cy: int) -> tuple[int, int]:
     gx = mask.get_at((min(cx + 1, mask.get_size()[0] - 1), cy)) - mask.get_at((max(cx - 1, 0), cy))

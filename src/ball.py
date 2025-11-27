@@ -17,9 +17,13 @@ class Ball:
         self.velocity = Vector2(0, 0)
         self.moving = False
         self.index = index
-        surf = pygame.Surface((RADIUS * 2, RADIUS * 2), pygame.SRCALPHA)
-        pygame.draw.circle(surf, (255, 255, 255, 255), (RADIUS, RADIUS), RADIUS)
-        self.mask = pygame.mask.from_surface(surf)
+        self.surf = pygame.Surface((RADIUS * 2, RADIUS * 2), pygame.SRCALPHA)
+        pygame.draw.circle(self.surf, self.color, (RADIUS, RADIUS), RADIUS)
+        number = FONTS[24].render(str(index), True, (255, 255, 0))
+        number_rect = number.get_rect()
+        number_rect.center = (RADIUS, RADIUS)
+        self.surf.blit(number, number_rect)
+        self.mask = pygame.mask.from_surface(self.surf)
 
     def __str__(self) -> str:
         return f"Ball {self.index}"
@@ -29,4 +33,5 @@ class Ball:
         self.moving = True
 
     def draw(self) -> None:
-        pygame.draw.circle(self.screen, self.color, self.coords, RADIUS)
+        self.screen.blit(self.surf, (self.coords.x - RADIUS, self.coords.y - RADIUS))
+        # pygame.draw.circle(self.screen, self.color, self.coords, RADIUS)

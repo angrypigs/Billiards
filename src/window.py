@@ -41,7 +41,7 @@ class Window:
     def check_csv_history(self) -> None:
         p = CSV_TRAINING_DATA_PATH
         headers = ["angle", "power"]
-        for i in range(16):
+        for i in range(BALL_QUANTITY + 1):
             for j in "xy":
                 headers.append(f"{i}_{j}")
         headers.append("score")

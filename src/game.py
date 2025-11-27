@@ -10,13 +10,14 @@ from src.cue import Cue
 
 class Game:
 
-    def __init__(self, screen: pygame.Surface) -> None:
+    def __init__(self, screen: pygame.Surface, debug: bool = True) -> None:
         self.screen = screen
         self.balls: list[Ball] = []
         self.power = 0
         self.angle = 0
         self.balls.append(Ball(self.screen, (WIDTH // 2, (HEIGHT - 100) // 2), (255, 255, 255), 0))
-        for i, (x, y) in enumerate(START_POS):
+        for i in range(BALL_QUANTITY):
+            x, y = START_POS[i]
             self.balls.append(Ball(self.screen, 
                 (WIDTH * 3 // 4 + RADIUS * x, (HEIGHT - 100) // 2 + RADIUS * y), COLORS[i], i + 1))
         self.bg = pygame.Surface((WIDTH, HEIGHT))
@@ -37,6 +38,9 @@ class Game:
         self._save = {}
         self.flag_won = None
         
+        self.debug = debug
+        self.debug_score = None
+        
     def draw(self) -> None:
         self.__game_frame()
         self.screen.blit(self.bg, (0, 0))
@@ -44,6 +48,14 @@ class Game:
         self.cue.draw()
         for ball in self.balls:
             ball.draw()
+        if self.debug and self.debug_score is not None:
+            try:
+                pygame.draw.line(self.screen, (255, 0, 0), self.balls[0].coords, 
+                                 self.balls[self.debug_score[0]].coords)
+                pygame.draw.line(self.screen, (255, 0, 0), self.balls[self.debug_score[0]].coords, 
+                                 HOLES[self.debug_score[1]])
+            except Exception:
+                pass
             
     def simulate(self, angle: float, power: float = MAX_POWER) -> None:
         self.__shoot(angle, power)
@@ -69,11 +81,12 @@ class Game:
         self.cue.disable()
         self.shoot_counter = 0
         balls_pos = {"angle": angle, "power": rand_power}
-        for i in range(16):
+        for i in range(BALL_QUANTITY + 1):
             found = next((b for b in self.balls if b.index == i), None)
             balls_pos[f"{i}_x"] = -1 if found is None else round(found.coords.x, 4)
             balls_pos[f"{i}_y"] = -1 if found is None else round(found.coords.y, 4)
         self._save = balls_pos.copy()
+        self.debug_score = None
     
     def __game_frame(self) -> None:
         for ball in self.balls:
@@ -99,17 +112,39 @@ class Game:
             self._save["score"] = -1
             return
         max_simil = 0
+        debug_data = [-1, -1]
         c = self.balls[0].coords
         for ball in self.balls:
+            flag = False
             if ball.index != 0:
+                for ball2 in self.balls:
+                    if ball2.index != 0 and ball2.index != ball.index:
+                        if (is_point_in_rectangle_buffer(c, ball.coords, ball2.coords, RADIUS * 2) or 
+                            line_hits_mask(self.mask, c.x, c.y, ball.coords.x, ball.coords.y, 50)):
+                            flag = True
+                            break
+                if flag: continue
                 a = (ball.coords.x - c.x, ball.coords.y - c.y)
-                for (hx, hy) in HOLES:
+                for i, (hx, hy) in enumerate(HOLES):
+                    flag2 = False
+                    for ball2 in self.balls:
+                        if ball2.index != 0 and ball2.index != ball.index:
+                            if (is_point_in_rectangle_buffer(ball.coords, (hx, hy), ball2.coords, RADIUS * 2) or
+                                line_hits_mask(self.mask, ball.coords.x, ball.coords.y, hx, hy, 50)):
+                                flag2 = True
+                                break
+                    if flag2: continue
                     b = (hx - ball.coords.x, hy - ball.coords.y)
                     simil = cosine_similarity(a, b)
                     if simil > max_simil:
                         max_simil = simil
-        max_simil = (max_simil + 1) / 4
+                        debug_data = [ball.index, i]
+        print(f"{max_simil} - Similarity before scalling")
+        max_simil = max(0.0, max_simil) / 2
+        print(f"{max_simil} - Similarity after scalling")
         self._save["score"] = self.shoot_counter + max_simil
+        print(self._save["score"])
+        self.debug_score = None if debug_data == [-1, -1] else debug_data
                     
             
     def __ball_collision_single(self, ball: Ball) -> None:
