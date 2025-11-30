@@ -23,6 +23,7 @@ class Ball:
         number_rect = number.get_rect()
         number_rect.center = (RADIUS, RADIUS)
         self.surf.blit(number, number_rect)
+        self.active = True
         self.mask = pygame.mask.from_surface(self.surf)
 
     def __str__(self) -> str:

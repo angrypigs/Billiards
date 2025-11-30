@@ -10,13 +10,12 @@ class Window:
 
     def __init__(self) -> None:
         self.db = dbHandler(TRAINING_DATA_PATH_1PLAYER)
-        pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Billiards")
         # render_pockets(with_holes=True)
         init_assets()
         self.clock = pygame.time.Clock()
-        self.game = Game(self.screen, self.db)
+        self.game = Game(self.db, self.screen)
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -33,7 +32,7 @@ class Window:
             self.game.draw()
             if self.game.flag_won is not None:
                 self.game.save_history()  
-                self.game = Game(self.screen, self.db)
+                self.game = Game(self.db, self.screen)
             pygame.display.flip()
             self.clock.tick(FPS)
             

@@ -1,2 +1,7 @@
 pillow
 pygame
+numpy
+--find-links https://download.pytorch.org/whl/cu126
+torch==2.9.0+cu126
+torchvision==0.24.0+cu126
+torchaudio==2.9.0+cu126

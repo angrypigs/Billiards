@@ -5,11 +5,12 @@ from math import sqrt
 
 WIDTH = 1700
 HEIGHT = 1000
+DIAMETER = int(sqrt(WIDTH**2 + HEIGHT**2))
 FPS = 120
 
 BALL_QUANTITY = 15
 
-MAX_POWER = 15
+MAX_POWER = 20
 RADIUS = 18
 THRESHOLD = 5
 LIMIT = THRESHOLD + RADIUS
@@ -54,6 +55,7 @@ COLORS = [
     (0, 229, 229),
 ]
 
+pygame.init()
 pygame.font.init()
 
 FONTS = {
@@ -79,6 +81,7 @@ def res_path(rel_path: str) -> str:
     return os.path.normpath(os.path.join(base_path, rel_path))
 
 TRAINING_DATA_PATH_1PLAYER = res_path("assets/training_data/model_1player.db")
+CHECKPOINT_PATH_1PLAYER = res_path("assets/models/model_1player.pt")
 
 
 
@@ -105,20 +108,31 @@ def is_point_in_rectangle_buffer(A: tuple[float, float],
     distance = cross / len_AB
     return distance <= R
 
-def line_hits_mask(mask: pygame.mask.Mask, x1: float, y1: float, x2: float, y2: float, step: int = 1) -> bool:
-    dx = x2 - x1
-    dy = y2 - y1
-    length = sqrt(dx*dx + dy*dy)
-    if length == 0:
-        return False
-    dx /= length
-    dy /= length
-    for i in range(0, int(length) + 1, step):
-        x = int(x1 + dx * i)
-        y = int(y1 + dy * i)
-        if 0 <= x < mask.get_size()[0] and 0 <= y < mask.get_size()[1]:
-            if mask.get_at((x, y)):
+def line_hits_mask(mask: pygame.mask.Mask, x1, y1, x2, y2):
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+
+    dx = abs(x2 - x1)
+    dy = abs(y2 - y1)
+    sx = 1 if x1 < x2 else -1
+    sy = 1 if y1 < y2 else -1
+    err = dx - dy
+
+    while True:
+        if 0 <= x1 < mask.get_size()[0] and 0 <= y1 < mask.get_size()[1]:
+            if mask.get_at((x1, y1)):
                 return True
+
+        if x1 == x2 and y1 == y2:
+            break
+
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x1 += sx
+        if e2 < dx:
+            err += dx
+            y1 += sy
+
     return False
 
 def estimate_normal(mask: pygame.mask, cx: int, cy: int) -> tuple[int, int]:
