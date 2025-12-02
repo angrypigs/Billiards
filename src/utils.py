@@ -64,7 +64,7 @@ FONTS = {
 }
 
 temp = [f"{y}_{x}" for x in range(16) for y in "xy"]
-temp.extend(["angle", "power", "score"])
+temp.extend(["ball", "angle", "power", "score"])
 COLUMN_NAMES = temp.copy()
 del temp
 

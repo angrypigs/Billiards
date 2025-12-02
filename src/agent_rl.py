@@ -1,29 +1,38 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import random
+from collections import deque
 from src.game import Game
 from src.db import dbHandler
 from src.utils import WIDTH, HEIGHT, BALL_QUANTITY, CHECKPOINT_PATH_1PLAYER, TRAINING_DATA_PATH_1PLAYER, MAX_POWER
 
-class MLPModel(nn.Module):
+class DualHeadMLPModel(nn.Module):
     def __init__(self, input_dim=32, hidden_dims=[256, 256, 128]):
         super().__init__()
-        layers = []
-        prev_dim = input_dim
-        for h in hidden_dims:
-            layers.append(nn.Linear(prev_dim, h))
-            layers.append(nn.ReLU())
-            prev_dim = h
-        layers.append(nn.Linear(prev_dim, 2))
-        self.model = nn.Sequential(*layers)
+        
+        self.trunk = nn.Sequential(
+            nn.Linear(input_dim, hidden_dims[0]),
+            nn.ReLU(),
+            nn.Linear(hidden_dims[0], hidden_dims[1]),
+            nn.ReLU(),
+            nn.Linear(hidden_dims[1], hidden_dims[2]),
+            nn.ReLU()
+        )
+
+        self.actor_discrete = nn.Linear(hidden_dims[2], BALL_QUANTITY) 
+
+        self.actor_continuous = nn.Linear(hidden_dims[2], 2) 
 
     def forward(self, x):
-        return self.model(x)
+        features = self.trunk(x)
+        discrete_output = self.actor_discrete(features)
+        continuous_output = self.actor_continuous(features)
+        return discrete_output, continuous_output
 
 
-import random
-from collections import deque
 
 class RLAgent:
     def __init__(self,
@@ -31,24 +40,27 @@ class RLAgent:
                  db: dbHandler | None = None,
                  device: str = None,
                  replay_size: int = 20000,
-                 batch_size: int = 128,
-                 train_every: int = 8,
                  lr: float = 3e-4,
                  epsilon_start: float = 0.2,
                  epsilon_final: float = 0.02,
-                 epsilon_decay_steps: int = 20000):
+                 epsilon_decay_steps: int = 20000,
+                 gamma: float = 0.99,
+                 game: Game | None = None):
+        
         self.model_path = model_path
         self.device = torch.device(device if device is not None else ("cuda" if torch.cuda.is_available() else "cpu"))
-        print("device:", self.device)
         self.db = db if db is not None else dbHandler(TRAINING_DATA_PATH_1PLAYER)
 
-        self.model = MLPModel().to(self.device)
+        self.model = DualHeadMLPModel().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.criterion = nn.MSELoss(reduction='none')
-        self.replay = deque(maxlen=replay_size)
-        self.batch_size = batch_size
-        self.train_every = train_every
+
+        self.criterion_ce = nn.CrossEntropyLoss(reduction='none') 
+        self.criterion_mse = nn.MSELoss(reduction='none') 
+        
+        self.episode_history = [] 
+        self.replay = deque(maxlen=replay_size) 
         self.step_count = 0
+        self.gamma = gamma
 
         self.epsilon = epsilon_start
         self.eps_start = epsilon_start
@@ -59,11 +71,13 @@ class RLAgent:
             checkpoint = torch.load(model_path, map_location=self.device)
             self.model.load_state_dict(checkpoint["model"])
             self.optimizer.load_state_dict(checkpoint["optimizer"])
-            print("Checkpoint loaded")
         except Exception:
-            print("No checkpoint found, creating new model")
+            pass
 
-        self.game = Game(screen=None, db=self.db, debug=False)
+        if game is None:
+            self.game = Game(screen=None, db=self.db, debug=False)
+        else:
+            self.game = game
 
     def get_state(self) -> np.ndarray:
         coords = []
@@ -79,96 +93,105 @@ class RLAgent:
     def _state_tensor(self, state_np):
         return torch.tensor(state_np, dtype=torch.float32, device=self.device)
 
-    def predict(self, state: np.ndarray, add_noise: bool = True) -> tuple[float, float]:
-        """Return denormalized (angle_deg, power) - angle in degrees, power in game units."""
+    def predict(self, state: np.ndarray, add_noise: bool = True) -> tuple[int, float, float]:
+        """Zwraca (Target_Idx, Delta_Angle_Norm, Power_Norm)."""
+        
         self.model.eval()
         with torch.no_grad():
             x = self._state_tensor(state)
-            out = self.model(x)
-            angle_norm = float(torch.tanh(out[0]).cpu().item())
-            power_norm = float(torch.sigmoid(out[1]).cpu().item())
+            discrete_out, continuous_out = self.model(x)
 
-        if add_noise:
-            if random.random() < self.epsilon:
-                angle_norm = random.uniform(-1.0, 1.0)
-                power_norm = random.uniform(0.0, 1.0)
-            else:
-                # gaussian noise
-                angle_norm = np.clip(angle_norm + np.random.normal(0, 0.08), -1.0, 1.0)
-                power_norm = np.clip(power_norm + np.random.normal(0, 0.05), 0.0, 1.0)
+            delta_angle_norm = float(torch.tanh(continuous_out[0]).cpu().item())
+            power_norm = float(torch.sigmoid(continuous_out[1]).cpu().item())
 
-        angle = angle_norm * 180.0
-        power = power_norm * MAX_POWER
-        return angle, power
+        active_balls_indices = [b.index for b in self.game.balls if b.index != 0 and b.active]
+        mask = torch.full(discrete_out.shape, -1e9, device=self.device) 
+        for idx in active_balls_indices:
+            mask[idx - 1] = 0
+        masked_logits = discrete_out + mask
 
-    def store_transition(self, state: np.ndarray, action: tuple, reward: float) -> None:
-        angle_norm = float(np.clip(action[0] / 180.0, -1.0, 1.0))
-        power_norm = float(np.clip(action[1] / MAX_POWER, 0.0, 1.0))
-        self.replay.append((state.copy(), np.array([angle_norm, power_norm], dtype=np.float32), float(reward)))
+        if add_noise and random.random() < self.epsilon:
+            probabilities = F.softmax(masked_logits, dim=0)
+            target_idx_tensor = torch.multinomial(probabilities, 1) 
+        else:
+            target_idx_tensor = torch.argmax(masked_logits)
+        target_idx = target_idx_tensor.item() + 1
+        if add_noise and random.random() >= self.epsilon:
+            delta_angle_norm = np.clip(delta_angle_norm + np.random.normal(0, 0.1), -1.0, 1.0)
+            power_norm = np.clip(power_norm + np.random.normal(0, 0.05), 0.0, 1.0)
 
-    def sample_batch(self):
-        batch = random.sample(self.replay, min(len(self.replay), self.batch_size))
-        states = np.stack([b[0] for b in batch])
-        actions = np.stack([b[1] for b in batch])
-        rewards = np.array([b[2] for b in batch], dtype=np.float32)
-        return states, actions, rewards
-
-    def train_from_replay(self, epochs: int = 1):
-        if len(self.replay) < max(256, self.batch_size):
-            return None
-        self.model.train()
-        losses = []
-        for _ in range(epochs):
-            states, actions, rewards = self.sample_batch()
-            states_t = torch.tensor(states, dtype=torch.float32, device=self.device)
-            actions_t = torch.tensor(actions, dtype=torch.float32, device=self.device)
-            rewards_t = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-
-            preds = self.model(states_t)
-            per_sample_loss = self.criterion(preds, actions_t).mean(dim=1)
-            weights = 1.0 + torch.clamp(rewards_t, min=0.0, max=1.0)
-            loss = (per_sample_loss * weights).mean()
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            self.optimizer.step()
-            losses.append(loss.item())
-        return float(np.mean(losses))
+        return target_idx, delta_angle_norm, power_norm
 
     def update_epsilon(self):
         self.epsilon = max(self.eps_final, self.eps_start - (self.step_count / self.eps_decay) * (self.eps_start - self.eps_final))
-
-    def play_episode(self, train_during: bool = True, max_steps: int = 5000):
-        self.game.__init__(screen=None, db=self.db, debug=False)
-        self.step_count = 0
-        episode_reward = 0.0
-
-        while self.game.flag_won is None and self.step_count < max_steps:
-            state = self.get_state()
-            angle, power = self.predict(state, add_noise=True)
-            score = self.game.simulate(angle, power)
-            episode_reward += score
-
-            self.store_transition(state, (angle, power), score)
-
-            if train_during and (self.step_count % self.train_every == 0):
-                avg_loss = self.train_from_replay(epochs=1)
-                if avg_loss is not None:
-                    print(f"[train] step={self.step_count} loss={avg_loss:.6f} replay={len(self.replay)} eps={self.epsilon:.4f}")
-
-            self.step_count += 1
-            self.update_epsilon()
-
-            print(f"step={self.step_count} score={score:.4f} angle={angle:.3f} power={power:.3f} cue={self.game.balls[0].coords}")
-
-        final_loss = self.train_from_replay(epochs=3)
-        print(f"episode finished total_reward={episode_reward:.3f} final_loss={final_loss}")
-        self.save_checkpoint()
 
     def save_checkpoint(self) -> None:
         torch.save({
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict()
         }, self.model_path)
-        print(f"Checkpoint saved to {self.model_path}")
+
+    def store_transition(self, state: np.ndarray, action: tuple, reward: float) -> None:
+        """Przechowuje (stan, Target_Idx, Continuous_Action, nagroda) w historii epizodu."""
+        
+        target_idx, delta_angle_norm, power_norm = action 
+        continuous_action = np.array([delta_angle_norm, power_norm], dtype=np.float32)
+        target_class_idx = np.array(target_idx - 1, dtype=np.int64) 
+        self.episode_history.append(
+            (state.copy(), target_class_idx, continuous_action, float(reward))
+        )
+
+    def train_from_episode(self) -> float | None:
+        if not self.episode_history:
+            return None
+
+        rewards = [r for _, _, _, r in self.episode_history]
+        G = 0.0
+        discounted_returns = []
+        for r in reversed(rewards):
+            G = r + self.gamma * G
+            discounted_returns.append(G)
+        discounted_returns.reverse()
+
+        states = np.stack([b[0] for b in self.episode_history])
+        targets_discrete = np.stack([b[1] for b in self.episode_history])
+        targets_continuous = np.stack([b[2] for b in self.episode_history])
+        
+        returns_t = torch.tensor(discounted_returns, dtype=torch.float32, device=self.device)
+        states_t = self._state_tensor(states)
+        targets_discrete_t = torch.tensor(targets_discrete, dtype=torch.long, device=self.device) 
+        targets_continuous_t = torch.tensor(targets_continuous, dtype=torch.float32, device=self.device)
+
+        self.model.train()
+        logits_t, preds_continuous_t = self.model(states_t) 
+        loss_discrete_per_sample = self.criterion_ce(logits_t, targets_discrete_t)
+        loss_continuous_per_sample = self.criterion_mse(preds_continuous_t, targets_continuous_t).mean(dim=1) 
+        loss_total_per_sample = loss_discrete_per_sample + loss_continuous_per_sample 
+        loss = (loss_total_per_sample * returns_t.detach()).mean() 
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+        self.optimizer.step()
+        
+        self.episode_history = []
+        return loss.item()
+    
+    def play_episode(self, train_during: bool = False, max_steps: int = 5000):
+        self.game.__init__(screen=None, db=self.db, debug=False)
+        self.step_count = 0
+        self.episode_history = []
+        episode_reward = 0.0
+
+        while self.game.flag_won is None and self.step_count < max_steps:
+            state = self.get_state()
+            target_idx, delta_angle_norm, power_norm = self.predict(state, add_noise=True)
+            score = self.game.simulate(target_idx, delta_angle_norm, power_norm) 
+            episode_reward += score
+            self.store_transition(state, (target_idx, delta_angle_norm, power_norm), score) 
+            self.step_count += 1
+            self.update_epsilon()
+
+        final_loss = self.train_from_episode()
+        print(f"Episode finished total_reward={episode_reward:.3f} final_loss={final_loss} steps={self.step_count}")
+        self.save_checkpoint()

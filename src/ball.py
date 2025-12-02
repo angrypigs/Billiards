@@ -17,6 +17,7 @@ class Ball:
         self.velocity = Vector2(0, 0)
         self.moving = False
         self.index = index
+        self.last_valid_coords = None
         self.surf = pygame.Surface((RADIUS * 2, RADIUS * 2), pygame.SRCALPHA)
         pygame.draw.circle(self.surf, self.color, (RADIUS, RADIUS), RADIUS)
         number = FONTS[24].render(str(index), True, (255, 255, 0))

@@ -1,8 +1,7 @@
 import pygame
 from pygame.math import Vector2
-from random import randint, choice, uniform
-from math import atan2, degrees, sqrt, sin, cos, radians
-import csv
+from random import uniform
+from math import atan2, degrees, sqrt, asin
 
 from src.utils import *
 from src.ball import Ball
@@ -15,6 +14,7 @@ class Game:
         if screen is None:
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
             init_assets()
+            pygame.display.quit()
         else:
             self.screen = screen
         self.db = db
@@ -41,14 +41,16 @@ class Game:
         self._history = []
         self.shoot_counter = 0
         self._white_shooted = False
+        self._any_hits = False
         self._save = {}
         self.flag_won = None
         
         self.debug = debug
         self.debug_score = None
+        self._physics_error = False
         
     def draw(self) -> None:
-        self.__game_frame()
+        self.__game_frame(history_save=False)
         self.screen.blit(self.bg, (0, 0))
         # self.screen.blit(self.mask_surf, (0,0))
         self.cue.draw()
@@ -64,18 +66,37 @@ class Game:
             except Exception:
                 pass
             
-    def simulate(self, angle: float, power: float = MAX_POWER, backtrack: bool = False) -> float:
+    def simulate(self, ball_idx: int, angle: float, power: float = 0.75, backtrack: bool = False) -> float:
+        data = {"angle": angle, "power": power, "ball": ball_idx}
+        for i in range(BALL_QUANTITY + 1):
+            found = next((b for b in self.balls if b.index == i and b.active), None)
+            data[f"x_{i}"] = -1 if found is None else round(found.coords.x, 4)
+            data[f"y_{i}"] = -1 if found is None else round(found.coords.y, 4)
+        self._save = data.copy()
         self.shoot_counter = 0
         self._white_shooted = False
         saved_state = [(ball.coords.xy[:], ball.active) for ball in self.balls]
-        self.shoot(angle, power)
+        saved_won = self.flag_won
+        
+        ball = next((b for b in self.balls if b.index == ball_idx and b.active), None)
+        bounds = None if ball is None else self.ball_angle_range(ball)
+        if bounds is None:
+            new_angle = uniform(-180, 180)
+            print(f"Critical error: ball {ball_idx} not found or numerical error")
+        else:
+            new_angle = bounds[0] + angle * (bounds[1] - bounds[0])
+        new_power = power * MAX_POWER
+        
+        self.shoot(new_angle, new_power)
         while self.player_flag is None:
-            self.__game_frame(backtrack=backtrack)
+            self.__game_frame(history_save=True, backtrack=backtrack)
         if backtrack:
             for ball, state in zip(self.balls, saved_state):
                 coords, active = state
                 ball.coords = Vector2(coords)
+                ball.velocity = Vector2(0, 0)
                 ball.active = active
+                self.flag_won = saved_won
         return self._save["score"]
     
     def save_history(self) -> None:
@@ -88,28 +109,25 @@ class Game:
             self._history = []
     
     def shoot(self, angle: float, power: float) -> None:
-        rand_power = uniform(power - 0.1, power + 0.1)
+        rand_power = uniform(power - 0.05, power + 0.05)
         self.balls[0].punch(angle, rand_power)
         self.power = 0
         self.player_flag = None
+        self._physics_error = False
         self.cue.disable()
         self.shoot_counter = 0
         self._white_shooted = False
-        balls_pos = {"angle": angle, "power": rand_power}
-        for i in range(BALL_QUANTITY + 1):
-            found = next((b for b in self.balls if b.index == i and b.active), None)
-            balls_pos[f"x_{i}"] = -1 if found is None else round(found.coords.x, 4)
-            balls_pos[f"y_{i}"] = -1 if found is None else round(found.coords.y, 4)
-        self._save = balls_pos.copy()
+        self._any_hits = False
         self.debug_score = None
     
-    def __game_frame(self, backtrack: bool = False) -> None:
+    def __game_frame(self, history_save: bool = False, backtrack: bool = False) -> None:
         for ball in self.balls:
             if not ball.active:
                 continue
             if ball.moving:
+                ball.last_valid_coords = ball.coords.copy()
                 ball.coords += ball.velocity
-                self.__ball_collision_single(ball)
+                self.__ball_collision_single(ball, backtrack=backtrack)
                 ball.velocity *= 0.99
                 if ball.velocity.magnitude() < 0.1:
                     ball.moving = False
@@ -117,16 +135,31 @@ class Game:
                 for ball2 in self.balls:
                     if ball != ball2 and ball2.active:
                         self.__ball_collision_double(ball, ball2)
+                if (ball.coords.x < 0 or ball.coords.x > WIDTH or
+                    ball.coords.y < 0 or ball.coords.y > HEIGHT):
+                    print(f"Physics error: ball {ball} on {ball.coords}")
+                    ball.coords = ball.last_valid_coords.copy()
+                    if ball.velocity.magnitude() > MAX_POWER:
+                        ball.velocity.scale_to_length(MAX_POWER * 0.8)
+                    if (ball.coords.x < 0 or ball.coords.x > WIDTH or
+                        ball.coords.y < 0 or ball.coords.y > HEIGHT):
+                        print(f"Critical physics error: ball {ball} reseted to table middle")
+                        ball.coords = Vector2(WIDTH // 2, (HEIGHT - 100) // 2)
+                        ball.velocity = Vector2(0, 0)
+                        self._physics_error = True
         if not any([b.moving for b in self.balls]) and self.player_flag is None:
             self.player_flag = 0
             self.__calculate_score()
-            if not backtrack: self._history.append(self._save.copy())
+            if history_save and not backtrack: self._history.append(self._save.copy())
             if len([b for b in self.balls if b.active]) < 2 and self.flag_won is None:
                 self.flag_won = 0
 
     def __calculate_score(self) -> None:
+        if self._physics_error:
+            self._save["score"] = 0.0
+            return
         if self._white_shooted:
-            self._save["score"] = -1
+            self._save["score"] = -5.0
             return
         max_simil = 0
         debug_data = [-1, -1]
@@ -158,13 +191,15 @@ class Game:
                         max_simil = simil
                         debug_data = [i, j]
         max_simil = max(0.0, max_simil) / 2
-        self._save["score"] = self.shoot_counter + max_simil
+        no_hit_penalty = -1.0 if not self._any_hits else 0.0
+        self._save["score"] = self.shoot_counter * 1.5 + max_simil + no_hit_penalty
         self.debug_score = None if debug_data == [-1, -1] else debug_data
         if self.debug and self.debug_score is not None:
-            print(self.balls[self.debug_score[0]], max_simil)
+            print(self.balls[self.debug_score[0]])
+            print(self._save["score"])
                     
             
-    def __ball_collision_single(self, ball: Ball) -> None:
+    def __ball_collision_single(self, ball: Ball, backtrack: bool = False) -> None:
         offset = (int(ball.coords[0] - RADIUS), int(ball.coords[1] - RADIUS))
         overlap = self.mask.overlap(ball.mask, offset)
         if overlap:
@@ -190,7 +225,7 @@ class Game:
                     ball.velocity.x, ball.velocity.y = 0, 0
                     ball.coords.x, ball.coords.y = WIDTH // 2, (HEIGHT - 100) // 2
                 else:
-                    print(ball.index)
+                    if not backtrack: print(ball.index)
                     ball.active = False
                     ball.velocity.x, ball.velocity.y = 0, 0
                     ball.coords.x, ball.coords.y = -1000, -1000
@@ -212,6 +247,8 @@ class Game:
             ball.coords -= correction
             ball2.coords += correction
             ball2.moving = True
+            if ball.index == 0 or ball2.index == 0:
+                self._any_hits = True
             
     def cue_handle(self, pos: tuple[int, int]) -> None:
         if self.player_flag is not None:
@@ -235,3 +272,23 @@ class Game:
         ball_pos = self.balls[0].coords
         self.angle = degrees(atan2(ball_pos[1] - pos[1], ball_pos[0] - pos[0]))
         self.cue_handle(pos)
+        
+    def ball_angle_range(self, target_ball: Ball) -> tuple[float, float] | None:
+        cue_pos = self.balls[0].coords
+        COLLISION_DISTANCE = 2 * RADIUS 
+        if target_ball.index == 0 or not target_ball.active:
+            return None
+        ball_pos = target_ball.coords
+        D = cue_pos.distance_to(ball_pos)
+        if D <= COLLISION_DISTANCE:
+            return None
+        dx = ball_pos.x - cue_pos.x
+        dy = ball_pos.y - cue_pos.y
+        theta_center = degrees(atan2(dy, dx))
+        try:
+            alpha = degrees(asin(COLLISION_DISTANCE / D))
+        except ValueError:
+            return None
+        theta_min = theta_center - alpha
+        theta_max = theta_center + alpha
+        return (theta_min, theta_max)
