@@ -23,6 +23,8 @@ Enter:
         agent = RLAgent()
         for _ in range(int(rounds) if rounds.isdigit() else 1):
             agent.play_episode()
+    elif n == "showcase":
+        window = Window(True)
     elif n == "dummy":
         dummy = dummyPlayer()
         rounds = input("Enter number of rounds or skip to go just one: ")

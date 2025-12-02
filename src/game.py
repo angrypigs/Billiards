@@ -78,15 +78,7 @@ class Game:
         saved_state = [(ball.coords.xy[:], ball.active) for ball in self.balls]
         saved_won = self.flag_won
         
-        ball = next((b for b in self.balls if b.index == ball_idx and b.active), None)
-        bounds = None if ball is None else self.ball_angle_range(ball)
-        if bounds is None:
-            new_angle = uniform(-180, 180)
-            print(f"Critical error: ball {ball_idx} not found or numerical error")
-        else:
-            new_angle = bounds[0] + angle * (bounds[1] - bounds[0])
-        new_power = power * MAX_POWER
-        
+        new_angle, new_power = self.agent_data_to_input(ball_idx, angle, power)
         self.shoot(new_angle, new_power)
         while self.player_flag is None:
             self.__game_frame(history_save=True, backtrack=backtrack)
@@ -292,3 +284,14 @@ class Game:
         theta_min = theta_center - alpha
         theta_max = theta_center + alpha
         return (theta_min, theta_max)
+
+    def agent_data_to_input(self, ball_idx: int, angle: float, power: float) -> tuple[float, float]:
+        ball = next((b for b in self.balls if b.index == ball_idx and b.active), None)
+        bounds = None if ball is None else self.ball_angle_range(ball)
+        if bounds is None:
+            new_angle = uniform(-180, 180)
+            print(f"Critical error: ball {ball_idx} not found or numerical error")
+        else:
+            new_angle = bounds[0] + angle * (bounds[1] - bounds[0])
+        new_power = power * MAX_POWER
+        return new_angle, new_power
