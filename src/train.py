@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from src.utils import CHECKPOINT_PATH_1PLAYER, TRAINING_DATA_PATH_1PLAYER
+from src.utils import CHECKPOINT_PATH_1PLAYER, TRAINING_DATA_PATH_1PLAYER, transform_to_relative
 from src.db import dbHandler
 from src.agent_rl import DualHeadMLPModel
 
@@ -29,11 +29,19 @@ class SupervisedTrainer:
     def train_from_db(self, epochs: int = 10, batch_size: int = 32):
 
         X, y_full, rewards = self.db.get_learning_data() 
-        if X is None or y_full.shape[1] != 3:
+
+        if X is None or len(X) == 0:
+            print("No new training data (used=0) found in database. Skipping training.")
+            return
+        if y_full.shape[1] != 3:
             print(f"Error: Data format incorrect (Y dim: {y_full.shape[1]}). Expected 3 columns.")
             return
-        targets_discrete = y_full[:, 0] - 1 
-        targets_continuous = y_full[:, 1:3] 
+        
+        X = transform_to_relative(X)
+            
+        targets_discrete = y_full[:, 0] - 1
+        targets_continuous = y_full[:, 1:3]
+        
         dataset = torch.utils.data.TensorDataset(
             torch.from_numpy(X).to(self.device).float(),
             torch.from_numpy(targets_discrete).to(self.device).long(),
@@ -41,14 +49,18 @@ class SupervisedTrainer:
             torch.from_numpy(rewards).to(self.device).float()
         )
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        
         self.model.train()
         for epoch in range(epochs):
             epoch_loss = 0.0
             for batch_x, batch_y_disc, batch_y_cont, batch_r in dataloader:
                 weights = (1.0 + batch_r.abs()).detach() 
-                logits, pred_cont = self.model(batch_x)
+                logits, all_pred_cont = self.model(batch_x)
+                gather_idx = batch_y_disc.view(-1, 1, 1).expand(-1, 1, 2)
+                selected_pred_cont = torch.gather(all_pred_cont, 1, gather_idx).squeeze(1)
                 loss_disc_per_sample = self.criterion_ce(logits, batch_y_disc)
-                loss_cont_per_sample = self.criterion_mse(pred_cont, batch_y_cont).mean(dim=1)
+                loss_cont_per_sample = self.criterion_mse(selected_pred_cont, batch_y_cont).mean(dim=1)
+                
                 total_loss_per_sample = loss_disc_per_sample + loss_cont_per_sample
                 loss = torch.mean(total_loss_per_sample * weights)
 
@@ -57,6 +69,7 @@ class SupervisedTrainer:
                 self.optimizer.step()
 
                 epoch_loss += loss.item()
+            
             print(f"Epoch {epoch+1}/{epochs}, Avg Loss: {epoch_loss/len(dataloader):.6f}")
 
         torch.save({

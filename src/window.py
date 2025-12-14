@@ -17,7 +17,7 @@ class Window:
         # render_pockets(with_holes=True)
         init_assets()
         self.clock = pygame.time.Clock()
-        self.game = Game(self.db, self.screen)
+        self.game = Game(self.db, self.screen, debug=(not agent_mode))
         if agent_mode: 
             self.agent = RLAgent(game=self.game)
         while True:
@@ -34,7 +34,7 @@ class Window:
             if self.agent_mode:
                 if self.game.player_flag is not None:
                     state = self.agent.get_state()
-                    idx, angle, power = self.agent.predict(state, False)
+                    idx, angle, power = self.agent.predict(state, True)
                     new_angle, new_power = self.game.agent_data_to_input(idx, angle, power)
                     self.game.shoot(new_angle, new_power)
             else:

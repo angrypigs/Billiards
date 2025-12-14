@@ -1,8 +1,7 @@
 import sqlite3
-from src.utils import * 
 import numpy as np
 
-
+from src.utils import * 
 
 class dbHandler:
     

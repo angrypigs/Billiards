@@ -10,44 +10,67 @@ from src.db import dbHandler
 
 class Game:
 
-    def __init__(self, db: dbHandler, screen: pygame.Surface | None = None, debug: bool = True) -> None:
-        if screen is None:
-            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-            init_assets()
+    def __init__(self, db: dbHandler, screen: pygame.Surface | None = None, debug: bool = True, special_mode: int = 0, off_screen: bool = False) -> None:
+        self.screen = screen
+        init_assets()
+        if off_screen:
             pygame.display.quit()
-        else:
-            self.screen = screen
         self.db = db
-        self.balls: list[Ball] = []
-        self.power = 0
-        self.angle = 0
-        self.balls.append(Ball(self.screen, (WIDTH // 2, (HEIGHT - 100) // 2), (255, 255, 255), 0))
-        for i in range(BALL_QUANTITY):
-            x, y = START_POS[i]
-            self.balls.append(Ball(self.screen, 
-                (WIDTH * 3 // 4 + RADIUS * x, (HEIGHT - 100) // 2 + RADIUS * y), COLORS[i], i + 1))
+        self.debug = debug
+
         self.bg = pygame.Surface((WIDTH, HEIGHT))
         self.bg.fill((0, 128, 0))
         self.bg.blit(IMAGES["table_bg"], (0, 0))
         self.bg.blit(IMAGES["table"], (0, 0))
         for c in HOLES:
             pygame.draw.circle(self.bg, (0, 0, 0), c, POCKET_RADIUS)
+            
         self.mask = pygame.mask.from_surface(IMAGES["table"])
         self.mask_surf = self.mask.to_surface(setcolor=(255,0,0,120), unsetcolor=(0,0,0,0))
-        
-        self.cue = Cue(self.screen)
+
+        dummy_surface = self.screen if self.screen else pygame.Surface((1, 1))
+        self.cue = Cue(dummy_surface)
+        self.reset(special_mode)
+
+    def reset(self, special_mode: int = 0) -> None: 
+        self.balls: list[Ball] = []
+        self.power = 0
+        self.angle = 0
+        white_start = (WIDTH // 2, (HEIGHT - 100) // 2)
+        white_ball = Ball(self.screen, white_start, (255, 255, 255), 0)
+        self.balls.append(white_ball)
+        if special_mode:
+            for i in range(special_mode):
+                valid_pos = False
+                attempts = 0
+                while not valid_pos and attempts < 100:
+                    x = WIDTH * 4 // 5 - (RADIUS * 3 * i) 
+                    y = uniform(150, HEIGHT - 250)
+                    dist = sqrt((x - white_ball.coords.x)**2 + (y - white_ball.coords.y)**2)
+                    if dist > 2.5 * RADIUS:
+                        valid_pos = True
+                        self.balls.append(Ball(self.screen, (x, y), COLORS[i], i + 1))
+                    attempts += 1
+                
+                if not valid_pos:
+                    print("WARN: Nie udało się bezpiecznie ustawić bili, reset awaryjny.")
+                    self.balls.append(Ball(self.screen, (WIDTH - 100, HEIGHT - 100), COLORS[i], i + 1))
+                    
+        else:
+            for i in range(BALL_QUANTITY):
+                x_pos, y_pos = START_POS[i]
+                self.balls.append(Ball(self.screen, 
+                    (WIDTH * 3 // 4 + RADIUS * x_pos, (HEIGHT - 100) // 2 + RADIUS * y_pos), COLORS[i], i + 1))
         self.player_flag = 0
-        
         self._history = []
         self.shoot_counter = 0
         self._white_shooted = False
         self._any_hits = False
         self._save = {}
         self.flag_won = None
-        
-        self.debug = debug
-        self.debug_score = None
         self._physics_error = False
+        self.debug_score = None
+        self.cue.update(self.balls[0].coords, 0, 0)
         
     def draw(self) -> None:
         self.__game_frame(history_save=False)
@@ -127,14 +150,14 @@ class Game:
                 for ball2 in self.balls:
                     if ball != ball2 and ball2.active:
                         self.__ball_collision_double(ball, ball2)
-                if (ball.coords.x < 0 or ball.coords.x > WIDTH or
-                    ball.coords.y < 0 or ball.coords.y > HEIGHT):
+                if (ball.coords.x < 10 or ball.coords.x > WIDTH - 10 or
+                    ball.coords.y < 10 or ball.coords.y > HEIGHT - 10):
                     print(f"Physics error: ball {ball} on {ball.coords}")
                     ball.coords = ball.last_valid_coords.copy()
                     if ball.velocity.magnitude() > MAX_POWER:
                         ball.velocity.scale_to_length(MAX_POWER * 0.8)
-                    if (ball.coords.x < 0 or ball.coords.x > WIDTH or
-                        ball.coords.y < 0 or ball.coords.y > HEIGHT):
+                    if (ball.coords.x < ERROR_THRESHOLD or ball.coords.x > WIDTH - ERROR_THRESHOLD or
+                        ball.coords.y < ERROR_THRESHOLD or ball.coords.y > HEIGHT - ERROR_THRESHOLD):
                         print(f"Critical physics error: ball {ball} reseted to table middle")
                         ball.coords = Vector2(WIDTH // 2, (HEIGHT - 100) // 2)
                         ball.velocity = Vector2(0, 0)
@@ -184,7 +207,7 @@ class Game:
                         debug_data = [i, j]
         max_simil = max(0.0, max_simil) / 2
         no_hit_penalty = -1.0 if not self._any_hits else 0.0
-        self._save["score"] = self.shoot_counter * 1.5 + max_simil + no_hit_penalty
+        self._save["score"] = self.shoot_counter * 1.5 + max_simil + no_hit_penalty - 0.45
         self.debug_score = None if debug_data == [-1, -1] else debug_data
         if self.debug and self.debug_score is not None:
             print(self.balls[self.debug_score[0]])
@@ -264,7 +287,7 @@ class Game:
         ball_pos = self.balls[0].coords
         self.angle = degrees(atan2(ball_pos[1] - pos[1], ball_pos[0] - pos[0]))
         self.cue_handle(pos)
-        
+
     def ball_angle_range(self, target_ball: Ball) -> tuple[float, float] | None:
         cue_pos = self.balls[0].coords
         COLLISION_DISTANCE = 2 * RADIUS 
@@ -272,17 +295,43 @@ class Game:
             return None
         ball_pos = target_ball.coords
         D = cue_pos.distance_to(ball_pos)
-        if D <= COLLISION_DISTANCE:
-            return None
+        if D < 0.00001:
+            print(f"!!! CRITICAL WARNING: Distance D is practically ZERO ({D}). Balls are merged at same coords!")
+            return (0.0, 360.0)
         dx = ball_pos.x - cue_pos.x
         dy = ball_pos.y - cue_pos.y
         theta_center = degrees(atan2(dy, dx))
+        if D <= COLLISION_DISTANCE + 0.0001: 
+            diff = COLLISION_DISTANCE - D
+            print(f"--- PHYSICS WARN: Overlap detected! ---")
+            print(f"    Target Ball: {target_ball.index}")
+            print(f"    Distance D: {D:.8f}")
+            print(f"    Required:   {COLLISION_DISTANCE:.8f}")
+            print(f"    Overlap:    {diff:.8f}")
+            print(f"    -> Returning fallback push-shot angle.")
+            return (theta_center - 89.0, theta_center + 89.0)
         try:
-            alpha = degrees(asin(COLLISION_DISTANCE / D))
-        except ValueError:
+            raw_ratio = COLLISION_DISTANCE / D
+            if raw_ratio > 1.0 or raw_ratio < -1.0:
+                print(f"--- MATH WARN: Floating point precision error (Clamping needed) ---")
+                print(f"    Distance D: {D:.10f}")
+                print(f"    Raw Ratio:  {raw_ratio:.10f}")
+                print(f"    -> Clamping to [-1, 1]")
+            ratio = max(-1.0, min(1.0, raw_ratio))
+            alpha = degrees(asin(ratio))
+        except ValueError as e:
+            print(f"!!! CRITICAL MATH ERROR in asin() !!!")
+            print(f"    Error: {e}")
+            print(f"    Distance D: {D}")
+            print(f"    Ratio: {COLLISION_DISTANCE/D}")
+            return (theta_center - 90, theta_center + 90)
+        except Exception as e:
+            print(f"!!! UNKNOWN ERROR in ball_angle_range !!! {e}")
             return None
+            
         theta_min = theta_center - alpha
         theta_max = theta_center + alpha
+        
         return (theta_min, theta_max)
 
     def agent_data_to_input(self, ball_idx: int, angle: float, power: float) -> tuple[float, float]:
@@ -290,7 +339,7 @@ class Game:
         bounds = None if ball is None else self.ball_angle_range(ball)
         if bounds is None:
             new_angle = uniform(-180, 180)
-            print(f"Critical error: ball {ball_idx} not found or numerical error")
+            print(f"Critical error: ball {ball_idx} not found or numerical error {"" if ball is None else ball.coords}")
         else:
             new_angle = bounds[0] + angle * (bounds[1] - bounds[0])
         new_power = power * MAX_POWER

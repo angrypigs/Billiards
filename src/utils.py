@@ -2,6 +2,7 @@ import os, sys
 import pygame
 from src.table_pockets_render import calculate_holes, POCKET_RADIUS
 from math import sqrt
+import numpy as np
 
 WIDTH = 1700
 HEIGHT = 1000
@@ -15,6 +16,7 @@ RADIUS = 18
 THRESHOLD = 5
 LIMIT = THRESHOLD + RADIUS
 CUE_RADIUS = 80
+ERROR_THRESHOLD = 15
 
 HOLES = calculate_holes(width=WIDTH, height=HEIGHT-100)
 
@@ -37,7 +39,7 @@ START_POS = (
 )
 
 COLORS = [
-    (255, 255, 255),
+    (100, 0, 20),
     (100, 100, 100),
     (229, 0, 0),
     (0, 229, 0),
@@ -149,12 +151,31 @@ def cosine_similarity(a: tuple[float, float], b: tuple[float, float]) -> float:
     norm_b = sqrt(b[0]**2 + b[1]**2)
     return dot / (norm_a * norm_b)
 
+def transform_to_relative(X):
+    X_rel = X.copy()
+    white_x = X[:, 0:1] 
+    white_y = X[:, 1:2]
+    num_balls = 15
+    for i in range(num_balls):
+        idx_x = 2 + (i * 2)
+        idx_y = 3 + (i * 2)
+        mask = (X[:, idx_x] != -1)
+        X_rel[mask, idx_x] = X[mask, idx_x] - white_x[mask, 0]
+        X_rel[mask, idx_y] = X[mask, idx_y] - white_y[mask, 0]
+        X_rel[~mask, idx_x] = 0.0
+        X_rel[~mask, idx_y] = 0.0
+    return X_rel
+
 
 
 IMAGES = {}
 
+LOAD_FLAG = [True]
+
 def init_assets() -> None:
-    IMAGES["table"] = pygame.image.load("assets/textures/table.png").convert_alpha()
-    IMAGES["table_bg"] = pygame.image.load("assets/textures/table_bg.png").convert_alpha()
-    IMAGES["cue"] = pygame.Surface((100, 100), pygame.SRCALPHA)
-    pygame.draw.rect(IMAGES["cue"], (0, 0, 0), (0, 40, 100, 20))
+    if LOAD_FLAG[0]:
+        LOAD_FLAG[0] = False
+        IMAGES["table"] = pygame.image.load("assets/textures/table.png").convert_alpha()
+        IMAGES["table_bg"] = pygame.image.load("assets/textures/table_bg.png").convert_alpha()
+        IMAGES["cue"] = pygame.Surface((100, 100), pygame.SRCALPHA)
+        pygame.draw.rect(IMAGES["cue"], (0, 0, 0), (0, 40, 100, 20))

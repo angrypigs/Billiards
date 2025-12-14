@@ -20,9 +20,10 @@ Enter:
         pass
     elif n == "simulate":
         rounds = input("Enter number of rounds or skip to go just one: ")
+        special = input("Enter number of balls in special mode or skip to leave it normal: ")
         agent = RLAgent()
         for _ in range(int(rounds) if rounds.isdigit() else 1):
-            agent.play_episode()
+            agent.play_episode(special_mode=int(special) if special.isdigit() else 0)
     elif n == "showcase":
         window = Window(True)
     elif n == "dummy":
