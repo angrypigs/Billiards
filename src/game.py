@@ -11,7 +11,10 @@ from src.db import dbHandler
 class Game:
 
     def __init__(self, db: dbHandler, screen: pygame.Surface | None = None, debug: bool = True, special_mode: int = 0, off_screen: bool = False) -> None:
-        self.screen = screen
+        if screen is not None:
+            self.screen = screen
+        else:
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         init_assets()
         if off_screen:
             pygame.display.quit()
@@ -53,7 +56,7 @@ class Game:
                     attempts += 1
                 
                 if not valid_pos:
-                    print("WARN: Nie udało się bezpiecznie ustawić bili, reset awaryjny.")
+                    print("WARN: Cannot place ball randomly, reseted.")
                     self.balls.append(Ball(self.screen, (WIDTH - 100, HEIGHT - 100), COLORS[i], i + 1))
                     
         else:
@@ -339,8 +342,10 @@ class Game:
         bounds = None if ball is None else self.ball_angle_range(ball)
         if bounds is None:
             new_angle = uniform(-180, 180)
-            print(f"Critical error: ball {ball_idx} not found or numerical error {"" if ball is None else ball.coords}")
+            debug_info = "" if ball is None else f"at {ball.coords}"
+            print(f"Critical error: ball {ball_idx} not found or numerical error {debug_info}")
         else:
-            new_angle = bounds[0] + angle * (bounds[1] - bounds[0])
+            angle_coefficient = (angle + 1.0) / 2.0
+            new_angle = bounds[0] + angle_coefficient * (bounds[1] - bounds[0])
         new_power = power * MAX_POWER
         return new_angle, new_power

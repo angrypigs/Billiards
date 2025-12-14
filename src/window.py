@@ -9,15 +9,16 @@ from src.agent_rl import RLAgent
 
 class Window:
 
-    def __init__(self, agent_mode: bool = False) -> None:
+    def __init__(self, agent_mode: bool = False, special_mode: int = 0) -> None:
         self.agent_mode = agent_mode
+        self.special_mode = special_mode
         self.db = dbHandler(TRAINING_DATA_PATH_1PLAYER)
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Billiards")
         # render_pockets(with_holes=True)
         init_assets()
         self.clock = pygame.time.Clock()
-        self.game = Game(self.db, self.screen, debug=(not agent_mode))
+        self.game = Game(self.db, self.screen, debug=(not agent_mode), special_mode=special_mode)
         if agent_mode: 
             self.agent = RLAgent(game=self.game)
         while True:
@@ -35,6 +36,7 @@ class Window:
                 if self.game.player_flag is not None:
                     state = self.agent.get_state()
                     idx, angle, power = self.agent.predict(state, True)
+                    print(f"Agent chose ball {idx} with angle {angle} and power {power}")
                     new_angle, new_power = self.game.agent_data_to_input(idx, angle, power)
                     self.game.shoot(new_angle, new_power)
             else:
@@ -42,7 +44,7 @@ class Window:
                     self.game.load(pygame.mouse.get_pos())
             self.game.draw()
             if self.game.flag_won is not None:
-                self.game = Game(self.db, self.screen)
+                self.game = Game(self.db, self.screen, special_mode=self.special_mode)
             pygame.display.flip()
             self.clock.tick(FPS)
             
