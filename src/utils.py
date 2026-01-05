@@ -166,7 +166,16 @@ def transform_to_relative(X):
         X_rel[~mask, idx_y] = 0.0
     return X_rel
 
+def map_angle_to_agent_output(angle_deg: float, bounds: tuple[float, float]) -> float:
+    min_a, max_a = bounds
+    if abs(max_a - min_a) < 0.001:
+        return 0.0
 
+    clamped = max(min_a, min(angle_deg, max_a))
+
+    ratio = (clamped - min_a) / (max_a - min_a)
+
+    return 2.0 * ratio - 1.0
 
 IMAGES = {}
 

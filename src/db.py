@@ -32,12 +32,13 @@ class dbHandler:
                          data)
         self.conn.commit()
         
-    def get_learning_data(self):
-        self.cur.execute("SELECT * FROM shots WHERE used = 0")
+    def get_learning_data(self, limit: int = 500000):
+        self.cur.execute(f"SELECT * FROM shots ORDER BY RANDOM() LIMIT {limit}")
         rows = self.cur.fetchall()
+        
         if not rows:
             return None, None, None
-        ids = []
+            
         X_list = []
         y_list = []
         rewards = []
@@ -50,18 +51,24 @@ class dbHandler:
             delta_angle_norm = coords_and_rest[33]
             power_norm = coords_and_rest[34]
             score = coords_and_rest[35]
-            
-            ids.append(rec_id)
+
+            wx = coords[0]
+            wy = coords[1]
             coords_norm = []
 
-            for i in range(0, 32, 2):
+            coords_norm.extend([wx / WIDTH, wy / HEIGHT])
+
+            for i in range(2, 32, 2):
                 x = coords[i]
                 y = coords[i + 1]
+                
                 if x < 0 or y < 0:
-                    coords_norm.extend([-1.0, -1.0])
+                    coords_norm.extend([0.0, 0.0]) 
                 else:
-                    coords_norm.append(x / WIDTH)
-                    coords_norm.append(y / HEIGHT)
+                    dx = (x - wx) / WIDTH
+                    dy = (y - wy) / HEIGHT
+                    coords_norm.extend([dx, dy])
+            
             X_list.append(coords_norm)
             y_list.append([target_idx, delta_angle_norm, power_norm]) 
             rewards.append(score)
@@ -69,12 +76,8 @@ class dbHandler:
         X = np.array(X_list, dtype=np.float32)
         y = np.array(y_list, dtype=np.float32) 
         rewards = np.array(rewards, dtype=np.float32)
-        id_tuple = tuple(ids)
-        if id_tuple:
-            self.cur.execute(f"UPDATE shots SET used = 1 WHERE id IN ({','.join(['?']*len(ids))})", id_tuple)
-            self.conn.commit()
-        return X, y, rewards
         
+        return X, y, rewards
         
     def close(self) -> None:
         self.conn.close()
