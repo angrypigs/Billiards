@@ -1,12 +1,13 @@
 import os, sys
 import pygame
 from src.table_pockets_render import calculate_holes, POCKET_RADIUS
-from math import sqrt
+from math import sqrt, acos, pi
 import numpy as np
 
 WIDTH = 1700
 HEIGHT = 1000
 DIAMETER = int(sqrt(WIDTH**2 + HEIGHT**2))
+DIAGONAL = float(DIAMETER)
 FPS = 120
 
 BALL_QUANTITY = 15
@@ -17,6 +18,8 @@ THRESHOLD = 5
 LIMIT = THRESHOLD + RADIUS
 CUE_RADIUS = 80
 ERROR_THRESHOLD = 15
+
+AI_POWER = 0.85
 
 HOLES = calculate_holes(width=WIDTH, height=HEIGHT-100)
 
@@ -66,7 +69,7 @@ FONTS = {
 }
 
 temp = [f"{y}_{x}" for x in range(16) for y in "xy"]
-temp.extend(["ball", "angle", "power", "score"])
+temp.extend(["ball", "angle", "score"])
 COLUMN_NAMES = temp.copy()
 del temp
 
@@ -151,6 +154,43 @@ def cosine_similarity(a: tuple[float, float], b: tuple[float, float]) -> float:
     norm_b = sqrt(b[0]**2 + b[1]**2)
     return dot / (norm_a * norm_b)
 
+def get_best_shot_heuristic(balls):
+    """
+    Wrapper dla Nauczyciela.
+    Przyjmuje listę obiektów kul (zakładamy, że balls[0] to biała).
+    Zwraca: (najlepsza_bila, najlepszy_kat_cisiecia_0_1)
+    """
+    white = balls[0]
+    wx, wy = white.coords.x, white.coords.y
+    
+    best_ball = None
+    best_similarity = -2.0
+    best_angle_val = 0.0
+
+    for ball in balls:
+        if not ball.active or ball.index == 0: continue
+        bx, by = ball.coords.x, ball.coords.y
+        for hx, hy in HOLES:
+            vec_b_x = hx - bx
+            vec_b_y = hy - by
+            dist_b = sqrt(vec_b_x**2 + vec_b_y**2)
+            if dist_b == 0: continue
+            dir_b_x = vec_b_x / dist_b
+            dir_b_y = vec_b_y / dist_b
+            gx = bx - (dir_b_x * 2 * RADIUS)
+            gy = by - (dir_b_y * 2 * RADIUS)
+            vec_a_x = gx - wx
+            vec_a_y = gy - wy
+            sim = cosine_similarity((vec_a_x, vec_a_y), (vec_b_x, vec_b_y))
+            if sim > best_similarity:
+                best_similarity = sim
+                best_ball = ball
+                val = max(-1.0, min(1.0, sim))
+                angle_rad = acos(val)
+                best_angle_val = angle_rad / (pi / 2)
+
+    return best_ball, best_angle_val
+
 def transform_to_relative(X):
     X_rel = X.copy()
     white_x = X[:, 0:1] 
@@ -172,7 +212,6 @@ def map_angle_to_agent_output(angle_deg: float, bounds: tuple[float, float]) -> 
         return 0.0
 
     clamped = max(min_a, min(angle_deg, max_a))
-
     ratio = (clamped - min_a) / (max_a - min_a)
 
     return 2.0 * ratio - 1.0

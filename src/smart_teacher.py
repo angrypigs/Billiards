@@ -47,7 +47,6 @@ class SmartTeacher:
                 dist_target_hole = target_to_hole.length()
                 
                 aim_dir = target_to_hole.normalize()
-                
                 ghost_pos = target.coords - (aim_dir * (2 * RADIUS))
                 
                 white_to_ghost = ghost_pos - white.coords
@@ -71,16 +70,14 @@ class SmartTeacher:
 
                 if difficulty < best_difficulty_score:
                     required_angle_global = degrees(atan2(shot_dir.y, shot_dir.x))
-                    
                     bounds = self.game.ball_angle_range(target)
                     
                     if bounds is None:
                         continue
                         
                     agent_angle_input = map_angle_to_agent_output(required_angle_global, bounds)
-                    
                     best_difficulty_score = difficulty
-                    best_shot = (target.index, agent_angle_input, 0.75)
+                    best_shot = (target.index, agent_angle_input)
 
         return best_shot
 
@@ -88,11 +85,10 @@ class SmartTeacher:
         samples_collected = 0
         iterations = 0
         
-        print(f"Generating {samples_needed} balanced samples...")
+        print(f"Generating {samples_needed} balanced samples using constant power: {AI_POWER}...")
         
         while samples_collected < samples_needed:
             iterations += 1
-
             n_balls = random.randint(1, 15)
             use_standard_triangle = (random.random() > 0.9)
             
@@ -101,23 +97,19 @@ class SmartTeacher:
 
             if mode != 0:
                 colored_balls = [b for b in self.game.balls if b.index != 0]
-
                 new_indices = random.sample(range(1, 16), len(colored_balls))
-
                 for ball, new_idx in zip(colored_balls, new_indices):
                     ball.index = new_idx
             
             shot_params = self.calculate_best_shot()
-            
             if shot_params:
-                ball_idx, angle_input, power_input = shot_params
-
-                score = self.game.simulate(ball_idx, angle_input, power_input, backtrack=False)
+                ball_idx, angle_input = shot_params
+                score = self.game.simulate(ball_idx, angle_input, power=AI_POWER, backtrack=False)
                 
                 if score > 0:
+
                     self.game.save_history()
                     samples_collected += 1
-                    
                     if samples_collected % 100 == 0:
                         print(f"Progress: {samples_collected}/{samples_needed}")
                 else:

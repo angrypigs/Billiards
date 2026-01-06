@@ -1,7 +1,6 @@
 from src.utils import *
 from src.window import Window
 from src.train import SupervisedTrainer
-from src.dummy_player import dummyPlayer
 from src.smart_teacher import SmartTeacher
 
 def main() -> None:
@@ -19,14 +18,9 @@ Enter:
         trainer.train(epochs=50, batch_size=256)
         pass
     elif n == "showcase":
-        window = Window(True)
-    elif n == "dummy":
-        dummy = dummyPlayer()
-        rounds = input("Enter number of rounds or skip to go just one: ")
-        batch = input("Enter batch size or skip to let it default (20): ")
-        rounds = 1 if not rounds.isdigit() else max(int(rounds), 1)
-        batch = 20 if not batch.isdigit() else max(int(batch), 1)
-        dummy.play_rounds(rounds=rounds, batch_size=batch)
+        balls = input("Enter balls quantity or skip to leave it normal mode: ")
+        balls = 0 if not balls.isdigit() else max(min(int(balls), 15), 1)
+        window = Window(True, special_mode=balls)
     elif n == "teacher":
         teacher = SmartTeacher()
         samples = input("Enter samples quantity or skip to leave it 1k: ")

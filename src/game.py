@@ -93,7 +93,7 @@ class Game:
                 pass
             
     def simulate(self, ball_idx: int, angle: float, power: float = 0.75, backtrack: bool = False) -> float:
-        data = {"angle": angle, "power": power, "ball": ball_idx}
+        data = {"angle": angle, "ball": ball_idx}
         for i in range(BALL_QUANTITY + 1):
             found = next((b for b in self.balls if b.index == i and b.active), None)
             data[f"x_{i}"] = -1 if found is None else round(found.coords.x, 4)
@@ -243,7 +243,7 @@ class Game:
                     ball.velocity.x, ball.velocity.y = 0, 0
                     ball.coords.x, ball.coords.y = WIDTH // 2, (HEIGHT - 100) // 2
                 else:
-                    if not backtrack: print(ball.index, "shooted")
+                    # if not backtrack: print(ball.index)
                     ball.active = False
                     ball.velocity.x, ball.velocity.y = 0, 0
                     ball.coords.x, ball.coords.y = -1000, -1000
@@ -345,7 +345,6 @@ class Game:
             debug_info = "" if ball is None else f"at {ball.coords}"
             print(f"Critical error: ball {ball_idx} not found or numerical error {debug_info}")
         else:
-            print(f"bounds: {bounds}")
             angle_coefficient = (angle + 1.0) / 2.0
             new_angle = bounds[0] + angle_coefficient * (bounds[1] - bounds[0])
         new_power = power * MAX_POWER

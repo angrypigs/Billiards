@@ -1,18 +1,20 @@
 import torch
 import numpy as np
-from src.agent_rl import DualHeadMLPModel
-from src.utils import WIDTH, HEIGHT, BALL_QUANTITY, CHECKPOINT_PATH_1PLAYER
+from pygame.math import Vector2
+
+from src.agent_rl import AngleRegressorModel
+from src.utils import *
 
 class AIPlayer:
     def __init__(self, model_path=CHECKPOINT_PATH_1PLAYER):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = DualHeadMLPModel().to(self.device)
+        self.model = AngleRegressorModel().to(self.device)
         self.model.eval()
         
         try:
             checkpoint = torch.load(model_path, map_location=self.device)
             self.model.load_state_dict(checkpoint["model"])
-            print(f"AI: Loaded brain from {model_path}")
+            print(f"AI: Loaded model from {model_path}")
         except Exception as e:
             print(f"AI CRITICAL ERROR: Could not load model! {e}")
 
@@ -20,43 +22,66 @@ class AIPlayer:
         white = game.balls[0]
         wx = white.coords.x
         wy = white.coords.y
-        
         features = [wx / WIDTH, wy / HEIGHT]
         
         for i in range(1, BALL_QUANTITY + 1):
             ball = next((b for b in game.balls if b.index == i and b.active), None)
-            
             if ball is None:
                 features.extend([0.0, 0.0])
             else:
-                dx = (ball.coords.x - wx) / WIDTH
-                dy = (ball.coords.y - wy) / HEIGHT
-                features.extend([dx, dy])
-                
+                dx = ball.coords.x - wx
+                dy = ball.coords.y - wy
+                dist = np.sqrt(dx**2 + dy**2) / DIAGONAL
+                angle = np.arctan2(dy, dx) / np.pi 
+                features.extend([dist, angle])
         return np.array(features, dtype=np.float32)
 
+    def select_best_ball_heuristic(self, game):
+        best_ball_idx = None
+        best_score = float('inf')
+        
+        white_pos = game.balls[0].coords
+
+        for ball in game.balls:
+            if not ball.active or ball.index == 0:
+                continue
+
+            for hole in HOLES:
+                hole_vec = Vector2(hole)
+                ball_vec = ball.coords
+
+                vec_to_hole = hole_vec - ball_vec
+                dist_to_hole = vec_to_hole.length()
+
+                dir_to_hole = vec_to_hole.normalize()
+                ghost_pos = ball_vec - (dir_to_hole * (2 * RADIUS))
+
+                dist_white_ghost = (ghost_pos - white_pos).length()
+                score = dist_to_hole + dist_white_ghost
+                
+                if score < best_score:
+                    best_score = score
+                    best_ball_idx = ball.index
+        
+        return best_ball_idx
+
     def predict(self, game):
+        target_idx = self.select_best_ball_mathematically(game)
+        
+        if target_idx is None:
+            return None
+
         state_np = self.get_state_vector(game)
         state_t = torch.tensor(state_np, device=self.device).unsqueeze(0)
 
         with torch.no_grad():
-            pred_class, pred_cont_all = self.model(state_t)
+            pred_angles_norm = self.model(state_t)
 
-        active_indices = [b.index - 1 for b in game.balls if b.active and b.index != 0]
-        if not active_indices:
-            return None
+        tensor_idx = target_idx - 1
+        raw_angle_norm = pred_angles_norm[0, tensor_idx].item()
+        
+        print(f"Math: {target_idx} | AI Norm: {raw_angle_norm:.4f}")
 
-        mask = torch.full_like(pred_class, float('-inf'))
-        mask[0, active_indices] = 0 
-        masked_logits = pred_class + mask
+        return target_idx, raw_angle_norm, AI_POWER
 
-        target_idx_raw = torch.argmax(masked_logits, dim=1).item()
-        target_ball_idx = target_idx_raw + 1 
-
-        params = pred_cont_all[0, target_idx_raw]
-        raw_angle = params[0].item()
-        raw_power = params[1].item()
-
-        final_power = max(0.85, raw_power) 
-
-        return target_ball_idx, raw_angle, final_power
+    select_best_ball_mathematically = select_best_ball_heuristic
