@@ -5,38 +5,50 @@ from src.smart_teacher import SmartTeacher
 from src.simulation import AISimulation
 
 def main() -> None:
-    sep = '=' * 40
-    n = input(f"""
+    sep = '=' * 50
+    choice = input(f"""
 {sep}
 
-Welcome to AI billiards menu
+Welcome to the AI Billiards Menu
 
 {sep}
               
-Enter:
-- "train" to train the model,
-- "teacher" to generate "ideal" shoots data for model by "ghost ball" shooting method,
-- "showcase" to watch the AI playing,
-- "simulate" to get model stats for given amount of matches (no graphics)
-- anything else to just play
-""")
+Available commands:
+- "train"    : Train the model
+- "teacher"  : Generate training data (ideal shots using 'ghost ball' method)
+- "showcase" : Watch the AI play
+- "simulate" : Run headless simulation to gather statistics (no graphics)
+- [Enter]    : Play manually
 
-    if n == "train":
+Your choice: """).strip().lower()
+
+    if choice == "train":
         trainer = SupervisedTrainer()
         trainer.train(epochs=50, batch_size=256)
-    elif n == "showcase":
-        balls = input("Enter balls quantity or skip to leave it normal mode: ")
-        balls = 0 if not balls.isdigit() else max(min(int(balls), 15), 1)
-        window = Window(True, special_mode=balls)
-    elif n == "teacher":
+        
+    elif choice == "showcase":
+        balls = input("Enter number of balls (or press Enter for default): ")
+        balls_count = int(balls) if balls.isdigit() else 0
+        if balls_count > 0:
+            balls_count = max(min(balls_count, 15), 1)
+            
+        Window(True, special_mode=balls_count)
+        
+    elif choice == "teacher":
+        samples = input("Enter number of samples (or press Enter for default 1000): ")
+        samples_count = int(samples) if samples.isdigit() else 1000
         teacher = SmartTeacher()
-        samples = input("Enter samples quantity or skip to leave it 1k: ")
-        samples = 1000 if not samples.isdigit() else max(int(samples), 100)
-        teacher.run(samples)
-    elif n == "simulate":
+        teacher.run(max(samples_count, 100))
+        
+    elif choice == "simulate":
+        rounds = input("Enter number of rounds (or press Enter for default 1): ")
+        rounds_count = int(rounds) if rounds.isdigit() else 1
+        
         simulation = AISimulation()
-        rounds = input("Enter rounds quantity or skip to leave it 1: ")
-        rounds = 1 if not rounds.isdigit() else max(int(rounds), 1)
-        simulation.simulate_matches(rounds)
+        simulation.simulate_matches(max(rounds_count, 1))
+        
     else:
-        window = Window()
+        Window()
+
+if __name__ == "__main__":
+    main()
