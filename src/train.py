@@ -6,7 +6,7 @@ import os
 
 from src.utils import CHECKPOINT_PATH_1PLAYER, TRAINING_DATA_PATH_1PLAYER
 from src.db import dbHandler
-from src.agent_rl import AngleRegressorModel
+from src.model import AngleRegressorModel
 
 class SupervisedTrainer:
     def __init__(self, model_path=CHECKPOINT_PATH_1PLAYER, db_path=TRAINING_DATA_PATH_1PLAYER):
@@ -55,7 +55,6 @@ class SupervisedTrainer:
 
         dataset = TensorDataset(X_t, targets_idx_t, targets_angle_t)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5)
 
         self.model.train()
@@ -65,9 +64,7 @@ class SupervisedTrainer:
 
             for batch_X, batch_idx, batch_angle in dataloader:
                 self.optimizer.zero_grad()
-                
                 pred_angles_all = self.model(batch_X)
-
                 batch_indices = torch.arange(batch_X.size(0), device=self.device)
                 pred_angle_selected = pred_angles_all[batch_indices, batch_idx]
 

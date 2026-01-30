@@ -1,8 +1,9 @@
 import os, sys
-import pygame
-from src.table_pockets_render import calculate_holes, POCKET_RADIUS
 from math import sqrt, acos, pi
-import numpy as np
+
+import pygame
+
+from src.table_pockets_render import calculate_holes, POCKET_RADIUS
 
 WIDTH = 1700
 HEIGHT = 1000

@@ -1,5 +1,6 @@
 import sqlite3
 import numpy as np
+
 from src.utils import *
 
 class dbHandler:
@@ -67,7 +68,7 @@ class dbHandler:
                 bx = coords[i]
                 by = coords[i+1]
                 if bx < 0:
-                    features.extend([0.0, 0.0])
+                    features.extend([-1.0, 0.0])
                 else:
                     dx = bx - wx
                     dy = by - wy

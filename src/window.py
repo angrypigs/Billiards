@@ -1,5 +1,6 @@
 import pygame
 import sys
+import random
 
 from src.utils import *
 from src.game import Game
@@ -30,8 +31,11 @@ class Window:
                 if not self.agent_mode:
                     if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                         self.game.release()
+
                     elif event.type == pygame.MOUSEMOTION:
-                        if event.buttons == (0, 0, 0):
+                        if event.buttons[0]: 
+                            self.game.load(event.pos)
+                        else:
                             self.game.move(event.pos)
 
             if self.agent_mode:
@@ -40,10 +44,19 @@ class Window:
                     if decision:
                         idx, angle, power = decision
                         final_angle, final_power = self.game.agent_data_to_input(idx, angle, power)
-
+                        print(f"Math: {idx} | AI Norm: {angle:.4f}")
                         self.game.shoot(final_angle, final_power) 
                     else:
-                        print("AI: No shot found / Panic mode")
+                        print("AI: Error of prediction: random shot")
+                        active_balls = [b.index for b in self.game.balls if b.active and b.index != 0]
+                    
+                        if active_balls:
+                            rand_idx = random.choice(active_balls)
+                            rand_angle = random.uniform(-1.0, 1.0)
+                            rand_power = 1.0 
+                            self.game.simulate(rand_idx, rand_angle, rand_power)
+                        else:
+                            break
 
             self.game.draw()
 

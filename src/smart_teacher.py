@@ -1,8 +1,6 @@
-import pygame
 from pygame.math import Vector2
 from math import degrees, atan2, acos
 import random
-import sys
 
 from src.game import Game
 from src.utils import *
@@ -104,6 +102,7 @@ class SmartTeacher:
             shot_params = self.calculate_best_shot()
             if shot_params:
                 ball_idx, angle_input = shot_params
+                print(ball_idx, angle_input)
                 score = self.game.simulate(ball_idx, angle_input, power=AI_POWER, backtrack=False)
                 
                 if score > 0:
