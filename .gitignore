@@ -1,5 +1,7 @@
-# Wszystkie katalogi __pycache__
-**/__pycache__/
+# Python cache and compiled files (at every directory level)
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Wszystkie pliki .pyc
-**/*.pyc
+*.pdf
+**/.vscode/

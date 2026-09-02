@@ -20,8 +20,6 @@ LIMIT = THRESHOLD + RADIUS
 CUE_RADIUS = 80
 ERROR_THRESHOLD = 15
 
-AI_POWER = 0.85
-
 HOLES = calculate_holes(width=WIDTH, height=HEIGHT-100)
 
 START_POS = (
@@ -69,13 +67,6 @@ FONTS = {
     40: pygame.font.SysFont('Arial', 40)
 }
 
-temp = [f"{y}_{x}" for x in range(16) for y in "xy"]
-temp.extend(["ball", "angle", "score"])
-COLUMN_NAMES = temp.copy()
-del temp
-
-
-
 def res_path(rel_path: str) -> str:
     """
     Return path to file modified by auto_py_to_exe path if packed to exe already
@@ -85,11 +76,6 @@ def res_path(rel_path: str) -> str:
     except Exception:
         base_path = sys.path[0]
     return os.path.normpath(os.path.join(base_path, rel_path))
-
-TRAINING_DATA_PATH_1PLAYER = res_path("assets/training_data/model_1player.db")
-CHECKPOINT_PATH_1PLAYER = res_path("assets/models/model_1player.pt")
-
-
 
 def is_point_in_rectangle_buffer(A: tuple[float, float], 
                                  B: tuple[float, float], 
@@ -157,9 +143,9 @@ def cosine_similarity(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 def get_best_shot_heuristic(balls):
     """
-    Wrapper dla Nauczyciela.
-    Przyjmuje listę obiektów kul (zakładamy, że balls[0] to biała).
-    Zwraca: (najlepsza_bila, najlepszy_kat_cisiecia_0_1)
+    Choose a promising target using simple ghost-ball geometry.
+
+    Returns the target ball and a normalized cut angle in the 0..1 range.
     """
     white = balls[0]
     wx, wy = white.coords.x, white.coords.y
@@ -192,22 +178,8 @@ def get_best_shot_heuristic(balls):
 
     return best_ball, best_angle_val
 
-def transform_to_relative(X):
-    X_rel = X.copy()
-    white_x = X[:, 0:1] 
-    white_y = X[:, 1:2]
-    num_balls = 15
-    for i in range(num_balls):
-        idx_x = 2 + (i * 2)
-        idx_y = 3 + (i * 2)
-        mask = (X[:, idx_x] != -1)
-        X_rel[mask, idx_x] = X[mask, idx_x] - white_x[mask, 0]
-        X_rel[mask, idx_y] = X[mask, idx_y] - white_y[mask, 0]
-        X_rel[~mask, idx_x] = 0.0
-        X_rel[~mask, idx_y] = 0.0
-    return X_rel
-
-def map_angle_to_agent_output(angle_deg: float, bounds: tuple[float, float]) -> float:
+def normalize_angle_within_bounds(angle_deg: float, bounds: tuple[float, float]) -> float:
+    """Map an angle within the supplied bounds to the -1..1 range."""
     min_a, max_a = bounds
     if abs(max_a - min_a) < 0.001:
         return 0.0
